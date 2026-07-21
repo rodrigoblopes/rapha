@@ -83,6 +83,95 @@ def cmd_sync(args: argparse.Namespace) -> int:
     return garmin_read.sync(cfg, start, end, verbose=True)
 
 
+def cmd_extract(args: argparse.Namespace) -> int:
+    from .protocol import catalog
+
+    cfg = config.load()
+    course = Path(args.course) if args.course else cfg.course_dir
+    if not course or not course.is_dir():
+        print(
+            "COURSE_DIR is not set or does not exist. Add it to %RAPHA_HOME%\\.env "
+            "or pass --course.",
+            file=sys.stderr,
+        )
+        return 2
+
+    print(f"extracting {course} -> {cfg.protocol_dir}")
+    summary = catalog.extract(course, cfg.protocol_dir)
+
+    print(
+        f"  {summary['programmes']} sheets, {summary['sessions']} training days, "
+        f"{summary['exercises']} exercises"
+    )
+    print(f"  {summary['diets']} diet models")
+    if summary["programmes_with_warnings"] or summary["diets_with_warnings"]:
+        print(
+            f"  {summary['programmes_with_warnings']} sheets and "
+            f"{summary['diets_with_warnings']} diet models need review — see "
+            f"{cfg.protocol_dir}\\programmes.json"
+        )
+    return 0
+
+
+def _garmin_summary(cfg) -> dict | None:
+    """Read-only DB summary for the portal. Never touches Garmin."""
+    from datetime import timedelta
+
+    from .db import Store
+    from .rules.energy import measured_tdee
+
+    if not cfg.db_path.is_file():
+        return None
+    with Store(cfg.db_path) as store:
+        end = date.today()
+        days = store.daily_between(end - timedelta(days=400), end)
+        acts = store.activities_between(end - timedelta(days=400), end)
+        if not days:
+            return None
+        tdee = measured_tdee(days, window_days=cfg.tdee_window_days, today=end)
+        return {
+            "days": len(days),
+            "activities": len(acts),
+            "range": f"{days[0].on} to {days[-1].on}",
+            "window_days": cfg.tdee_window_days,
+            "tdee": tdee.value if tdee else "—",
+        }
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    from .dashboard import render
+    from .protocol import catalog
+
+    cfg = config.load()
+    programmes, diets = catalog.load(cfg.protocol_dir)
+    garmin = _garmin_summary(cfg)
+
+    body = render.render(programmes, diets, garmin)
+    path = render.write(cfg.dist_dir, body)
+    render.write_briefing(
+        cfg.dist_dir,
+        {
+            "generated": date.today().isoformat(),
+            "garmin": garmin,
+            "programmes": programmes,
+            "diets": diets,
+        },
+    )
+    print(f"portal written to {path}")
+    if not programmes:
+        print("  (no protocol yet — run `rapha extract`)")
+    if not garmin:
+        print("  (no Garmin data yet — run `rapha login` then `rapha sync`)")
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    from .server import serve
+
+    cfg = config.load()
+    return serve(cfg)
+
+
 def _not_yet(name: str):
     def run(args: argparse.Namespace) -> int:
         print(f"`rapha {name}` is not built yet.", file=sys.stderr)
@@ -105,8 +194,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="how far back to sync (default: 365, a full year of history)",
     )
 
+    p_extract = sub.add_parser(
+        "extract", help="parse the course into %RAPHA_HOME%/protocol"
+    )
+    p_extract.add_argument("--course", help="override COURSE_DIR")
+
     for name, help_text in [
-        ("extract", "parse the course into %RAPHA_HOME%/protocol"),
         ("assess", "decide the Projeto 60 Dias level from training history"),
         ("plan", "next week's fichas and menu"),
         ("push", "create workouts in Garmin Connect (dry-run by default)"),
@@ -118,7 +211,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-HANDLERS = {"login": cmd_login, "sync": cmd_sync}
+HANDLERS = {
+    "login": cmd_login,
+    "sync": cmd_sync,
+    "extract": cmd_extract,
+    "report": cmd_report,
+    "serve": cmd_serve,
+}
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -38,8 +38,18 @@ src = ["src", "tests", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+# The CSS block and the HTML template lines are long by nature; wrapping them
+# hurts readability more than the limit helps. Ambiguous-character checks are
+# noise here: the portal deliberately renders "4 × 12" with a real multiplication
+# sign, and the course material is Portuguese.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/rapha/dashboard/render.py" = ["E501"]
+"src/rapha/protocol/catalog.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "scripts"]  # scripts/ so the commit guard is testable
 addopts = "-q"
+
