@@ -77,6 +77,26 @@ class TestContentScanning:
         found = check_content("cfg.env", b"DEFICIT_BPS=1750\nPORTAL_PORT=8766")
         assert not found
 
+    def test_code_that_merely_handles_a_password_is_not_a_leak(self):
+        """The guard must not fire on the very code that avoids storing passwords.
+
+        A rule that flags ordinary source gets switched off, and then it protects
+        nothing at all.
+        """
+        assert not check_content("cli.py", b"password = sys.stdin.read().strip()")
+        assert not check_content("cli.py", b"password = getpass.getpass(prompt)")
+        assert not check_content("auth.py", b"def mint(cfg, password: str) -> str:")
+
+    def test_passing_a_variable_through_is_not_a_leak(self):
+        # `password=password,` inside a call is a variable name, not a credential.
+        assert not check_content("auth.py", b"    Garmin(\n        password=password,\n    )")
+
+    def test_but_a_real_looking_value_still_trips_it(self):
+        assert check_content("x.py", b"PASSWORD = correcthorse7battery")
+
+    def test_a_quoted_literal_credential_is_still_caught(self):
+        assert check_content("x.py", b'api_key = "abcd1234efgh5678"')
+
     def test_binary_content_does_not_explode(self):
         assert check_content("x.bin", b"\xff\xfe\x00\x01") == []
 
