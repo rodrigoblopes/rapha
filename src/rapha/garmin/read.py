@@ -47,10 +47,11 @@ def _get(d: Any, *path: str, default: Any = None) -> Any:
 
 
 def _int(value: Any) -> int | None:
+    """Round to a whole number. Garmin returns some counts as floats."""
     if value is None:
         return None
     try:
-        return int(round(float(value)))
+        return round(float(value))
     except (TypeError, ValueError):
         return None
 
@@ -126,7 +127,7 @@ def _weights_by_date(client, start: date, end: date) -> dict[date, int]:
     out: dict[date, int] = {}
     try:
         payload = client.get_weigh_ins(start.isoformat(), end.isoformat())
-    except Exception:  # noqa: BLE001 — a missing scale is not a sync failure
+    except Exception:
         return out
 
     for day in _get(payload, "dailyWeightSummaries", default=[]) or []:
@@ -179,7 +180,7 @@ def sync(
         ):
             try:
                 payloads.append(fetch(stamp))
-            except Exception:  # noqa: BLE001 — one gap must not abort the sync
+            except Exception:
                 payloads.append(None)
             time.sleep(PACE_S)
 

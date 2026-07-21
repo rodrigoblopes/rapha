@@ -6,6 +6,7 @@ Garmin's responses differ by device and firmware, and a key that is missing mean
 """
 
 from datetime import date
+from typing import ClassVar
 
 from rapha.garmin.read import activity_from_payload, daily_from_payloads
 from rapha.models import Source
@@ -77,7 +78,7 @@ class TestDailyMetrics:
 
 
 class TestActivities:
-    RAW = {
+    RAW: ClassVar[dict] = {
         "activityId": 987654321,
         "startTimeLocal": "2026-06-01 06:30:00",
         "activityType": {"typeKey": "cycling"},
