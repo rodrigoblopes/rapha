@@ -1,0 +1,51 @@
+# ── Rapha: the repo holds CODE ONLY (ADR-002) ────────────────────────────────
+# Everything real lives in %RAPHA_HOME% (default C:\Users\<you>\.rapha), OUTSIDE
+# OneDrive. This file is a second line of defence, not the first — .gitignore
+# governs Git, and the repo path is inside OneDrive, which is not Git.
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*token*.json
+garmin_tokens.json
+oauth*.json
+
+# Personal health data — must never reach the repo
+*.db
+*.sqlite
+*.sqlite3
+/data/
+/photos/
+/dist/
+*.fit
+*.tcx
+*.gpx
+
+# Purchased course material and anything derived from it (ADR-002)
+/protocol/
+/transcripts/
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.srt
+*.vtt
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
