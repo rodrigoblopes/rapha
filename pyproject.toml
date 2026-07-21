@@ -1,0 +1,45 @@
+[project]
+name = "rapha"
+version = "0.1.0"
+description = "Local-first personal health portal: Garmin ingest, Projeto 60 Dias, macro-first recomposition"
+requires-python = ">=3.12"
+
+# Deliberately tiny. Adding to this list requires justification in DECISIONS.md.
+dependencies = [
+    "garminconnect>=0.3.6",  # unofficial Garmin Connect client (ADR-001); brings curl_cffi
+    "pdfplumber>=0.11",      # course fichas, diet models and the TACO table are PDF
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+# Extraction tooling, NOT a runtime dependency (ADR-004). Used once, under tools/,
+# never imported by src/rapha/. Also needs ffmpeg on PATH.
+extract = [
+    "faster-whisper>=1.0",
+]
+
+[project.scripts]
+rapha = "rapha.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
