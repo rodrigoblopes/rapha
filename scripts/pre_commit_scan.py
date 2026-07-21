@@ -37,6 +37,21 @@ BLOCKED_DIRS = ("data/", "photos/", "protocol/", "transcripts/", "dist/")
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".heic", ".webp"}
 
+# Names that announce themselves. Learned the hard way: a real Garmin password
+# arrived as `pwd.txt.txt`, which has no `key = value` for the content scanner to
+# match, so it sailed straight through. Content matching alone was never enough.
+CREDENTIAL_NAME_HINTS = (
+    "pwd",
+    "passwd",
+    "password",
+    "secret",
+    "credential",
+    "id_rsa",
+    "id_ed25519",
+    "htpasswd",
+)
+KEY_MATERIAL_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".keystore", ".jks"}
+
 SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "an assigned credential",
@@ -54,6 +69,13 @@ SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 ]
 
 ALLOWED_PATHS = {".env.example", "scripts/pre_commit_scan.py"}
+
+# A test that proves the guard catches credentials must contain things that look
+# like credentials. Rather than allowlisting whole files by path -- which turns
+# them into permanent blind spots -- a test file may opt out of *content* scanning
+# by carrying this marker. Path rules still apply, and the pragma is only honoured
+# under tests/, so it can never silence a scan in src/.
+FIXTURE_PRAGMA = "pre-commit-scan: fixtures-are-invented"
 
 
 def staged_files() -> list[str]:
@@ -83,8 +105,16 @@ def check_path(path: str) -> str | None:
     if p.name == ".env" or (p.name.startswith(".env.") and path not in ALLOWED_PATHS):
         return "an environment file — the real .env belongs in %RAPHA_HOME%"
 
-    if "token" in p.name.lower() and p.suffix == ".json":
+    name = p.name.lower()
+
+    if "token" in name and p.suffix == ".json":
         return "a token store"
+
+    if p.suffix.lower() in KEY_MATERIAL_SUFFIXES:
+        return "key material"
+
+    if any(hint in name for hint in CREDENTIAL_NAME_HINTS):
+        return "a credential file, by its name"
 
     suffix_reason = BLOCKED_SUFFIXES.get(p.suffix.lower())
     if suffix_reason:
@@ -103,6 +133,8 @@ def check_content(path: str, blob: bytes) -> list[str]:
     try:
         text = blob.decode("utf-8")
     except UnicodeDecodeError:
+        return []
+    if path.startswith("tests/") and FIXTURE_PRAGMA in text:
         return []
     return [reason for reason, pattern in SECRET_PATTERNS if pattern.search(text)]
 

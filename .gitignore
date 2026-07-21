@@ -49,3 +49,11 @@ htmlcov/
 .idea/
 Thumbs.db
 desktop.ini
+
+# Credential-shaped filenames (see scripts/pre_commit_scan.py)
+pwd*
+password*
+*secret*
+*credential*
+*.pem
+*.key

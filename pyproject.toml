@@ -41,5 +41,5 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "scripts"]  # scripts/ so the commit guard is testable
 addopts = "-q"
