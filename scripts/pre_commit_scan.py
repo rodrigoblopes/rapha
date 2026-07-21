@@ -33,6 +33,11 @@ BLOCKED_SUFFIXES = {
 }
 
 # Directories that only ever hold real data or purchased material.
+#
+# Anchored at the repo root on purpose. `src/rapha/protocol/` is the *parser
+# package*; `protocol/` at the root would be extracted course material. Matching
+# the name anywhere in the path blocked the source tree, and a guard that blocks
+# legitimate code is a guard that gets bypassed.
 BLOCKED_DIRS = ("data/", "photos/", "protocol/", "transcripts/", "dist/")
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".heic", ".webp"}
@@ -144,7 +149,7 @@ def check_path(path: str) -> str | None:
     if suffix_reason:
         return suffix_reason
 
-    if any(seg in lowered for seg in BLOCKED_DIRS):
+    if any(lowered.startswith(seg) for seg in BLOCKED_DIRS):
         return "inside a data/protocol directory"
 
     if p.suffix.lower() in IMAGE_SUFFIXES and "test" not in lowered:

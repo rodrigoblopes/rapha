@@ -17,6 +17,13 @@ class TestFilesThatAreDataNotCode:
 
     def test_anything_under_protocol_is_blocked(self):
         assert check_path("protocol/fichas.json") is not None
+        assert check_path("data/rapha.db") is not None
+
+    def test_but_the_parser_package_of_the_same_name_is_not(self):
+        # src/rapha/protocol/ is the code that reads the course; protocol/ at the
+        # root would be the course itself. Blocking the former blocks the repo.
+        assert check_path("src/rapha/protocol/ficha_pdf.py") is None
+        assert check_path("src/rapha/protocol/models.py") is None
 
     def test_a_token_store_is_blocked(self):
         assert check_path("garmin_tokens.json") is not None
