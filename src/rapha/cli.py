@@ -104,6 +104,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
         f"{summary['exercises']} exercises"
     )
     print(f"  {summary['diets']} diet models")
+    print(f"  {summary['foods']} foods in the TACO table")
     if summary["programmes_with_warnings"] or summary["diets_with_warnings"]:
         print(
             f"  {summary['programmes_with_warnings']} sheets and "

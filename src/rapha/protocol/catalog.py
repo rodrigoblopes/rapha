@@ -16,10 +16,12 @@ from typing import Any
 from ..units import Grams, Kcal, Millimetres, Seconds
 from .diet_pdf import parse_diet
 from .ficha_pdf import parse_ficha
+from .taco import parse_taco
 
 #: Directory name fragments -> what lives in them.
 FICHA_MODULES = ("02", "03", "04", "05", "06", "07")
 DIET_MODULE = "21"
+FOOD_TABLE_MODULE = "22"
 
 
 def _encode(obj: Any) -> Any:
@@ -60,6 +62,16 @@ def extract(course: Path, out: Path, *, male_only: bool = True) -> dict[str, Any
         for pdf in sorted(module.glob("*.pdf")):
             diets.append({"module": module.name, **_encode(parse_diet(pdf))})
 
+    foods: list[dict] = []
+    for module in _module_dirs(course, FOOD_TABLE_MODULE):
+        for pdf in sorted(module.glob("*.pdf")):
+            if "taco" in pdf.name.lower():
+                foods = [_encode(f) for f in parse_taco(pdf)]
+
+    (out / "foods.json").write_text(
+        json.dumps(foods, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
     (out / "programmes.json").write_text(
         json.dumps(programmes, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -76,6 +88,7 @@ def extract(course: Path, out: Path, *, male_only: bool = True) -> dict[str, Any
         "programmes_with_warnings": sum(1 for p in programmes if p["warnings"]),
         "diets": len(diets),
         "diets_with_warnings": sum(1 for d in diets if d["warnings"]),
+        "foods": len(foods),
         "out": str(out),
     }
     (out / "summary.json").write_text(
@@ -93,3 +106,10 @@ def load(out: Path) -> tuple[list[dict], list[dict]]:
         return json.loads(path.read_text(encoding="utf-8"))
 
     return _read("programmes.json"), _read("diets.json")
+
+
+def load_foods(out: Path) -> list[dict]:
+    path = out / "foods.json"
+    if not path.is_file():
+        return []
+    return json.loads(path.read_text(encoding="utf-8"))
