@@ -191,7 +191,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--days",
         type=int,
         default=365,
-        help="how far back to sync (default: 365, a full year of history)",
+        help="how far back to sync activities (default: 365, a full year)",
+    )
+    p_sync.add_argument(
+        "--metric-days",
+        type=int,
+        default=60,
+        help="how far back to sync per-day metrics (default: 60). Activities come "
+        "from one bulk call; calories, sleep and HRV are per-day endpoints, so a "
+        "year of those would be ~1400 requests against an unpublished rate limit.",
     )
 
     p_extract = sub.add_parser(
