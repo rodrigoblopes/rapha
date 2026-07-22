@@ -206,6 +206,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
     from .protocol import catalog
     from .rules import cycle, menu
     from .rules.energy import predicted_bmr, recompose_direction
+    from .units import Grams, Kcal
 
     cfg = config.load()
     programmes, diets = catalog.load(cfg.protocol_dir)
