@@ -18,9 +18,11 @@ oauth*.json
 /data/
 /photos/
 /dist/
+/exports/
 *.fit
 *.tcx
 *.gpx
+*.zip
 
 # Purchased course material and anything derived from it (ADR-002)
 /protocol/

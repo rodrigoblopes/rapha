@@ -166,6 +166,29 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_import(args: argparse.Namespace) -> int:
+    """Ingest a Garmin Connect web-export directory (the manual fallback)."""
+    from .ingest.garmin_csv import ingest_export
+
+    cfg = config.load()
+    export_dir = Path(args.dir) if args.dir else cfg.home / "exports"
+    if not export_dir.is_dir():
+        print(f"no export directory at {export_dir}. Point --dir at your Garmin "
+              "export, or drop the CSVs there.", file=sys.stderr)
+        return 2
+
+    print(f"ingesting {export_dir}")
+    summary = ingest_export(export_dir, cfg.db_path)
+    if not summary.get("range"):
+        print("  nothing recognised — are these Garmin Connect export CSVs?", file=sys.stderr)
+        return 1
+    print(f"  {summary['activities']} activities, {summary['days']} days "
+          f"({summary['range']})")
+    print(f"  {summary['measured_tdee_days']} days carry a measured TDEE")
+    print("\nnow: rapha assess   rapha plan   rapha report")
+    return 0
+
+
 def cmd_assess(args: argparse.Namespace) -> int:
     from datetime import timedelta
 
@@ -395,6 +418,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_extract.add_argument("--course", help="override COURSE_DIR")
 
+    p_import = sub.add_parser(
+        "import", help="ingest a Garmin Connect web-export directory"
+    )
+    p_import.add_argument("--dir", help="export directory (default: %%RAPHA_HOME%%/exports)")
+
     p_push = sub.add_parser(
         "push", help="create workouts in Garmin Connect (dry-run by default)"
     )
@@ -435,6 +463,7 @@ HANDLERS = {
     "login": cmd_login,
     "sync": cmd_sync,
     "extract": cmd_extract,
+    "import": cmd_import,
     "assess": cmd_assess,
     "plan": cmd_plan,
     "push": cmd_push,

@@ -23,6 +23,7 @@ BLOCKED_SUFFIXES = {
     ".fit": "a Garmin activity/workout file",
     ".tcx": "a Garmin activity file",
     ".gpx": "a GPS track",
+    ".zip": "an archive (likely a Garmin export)",
     ".pdf": "course material or a statement",
     ".mp4": "course video",
     ".mov": "course video",
@@ -38,7 +39,11 @@ BLOCKED_SUFFIXES = {
 # package*; `protocol/` at the root would be extracted course material. Matching
 # the name anywhere in the path blocked the source tree, and a guard that blocks
 # legitimate code is a guard that gets bypassed.
-BLOCKED_DIRS = ("data/", "photos/", "protocol/", "transcripts/", "dist/")
+#
+# `exports/` was added after a real incident: a Garmin web export dropped into the
+# repo folder was committed by a blanket `git add -A`, because .csv is not itself
+# a blocked suffix (it can be a code fixture). The directory rule catches it.
+BLOCKED_DIRS = ("data/", "photos/", "protocol/", "transcripts/", "dist/", "exports/")
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".heic", ".webp"}
 

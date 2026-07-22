@@ -19,6 +19,12 @@ class TestFilesThatAreDataNotCode:
         assert check_path("protocol/fichas.json") is not None
         assert check_path("data/rapha.db") is not None
 
+    def test_a_garmin_export_directory_is_blocked(self):
+        # Real incident: a Garmin web export in the repo folder was committed by a
+        # blanket `git add -A` because .csv is not itself a blocked suffix.
+        assert check_path("exports/Sleep.csv") is not None
+        assert check_path("exports/23356037240.zip") is not None
+
     def test_but_the_parser_package_of_the_same_name_is_not(self):
         # src/rapha/protocol/ is the code that reads the course; protocol/ at the
         # root would be the course itself. Blocking the former blocks the repo.

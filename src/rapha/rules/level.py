@@ -79,17 +79,34 @@ def assess_level(
         weeks_with[key] = weeks_with.get(key, 0) + 1
 
     active_weeks = len(weeks_with)
-    per_week = round(len(strength) / weeks, 2) if weeks else 0.0
-    consistency = round(active_weeks / weeks, 2) if weeks else 0.0
+
+    # Rates are measured over the span the data actually covers, not the nominal
+    # 52-week window. An 8-week export divided by 52 reads as "17% consistency"
+    # when the person trains four times a week — a denominator artefact, not a fact.
+    all_dates = sorted({a.start.date() for a in window})
+    observed_weeks = max(1.0, ((today - all_dates[0]).days + 1) / 7) if all_dates else float(weeks)
+
+    per_week = round(len(strength) / observed_weeks, 2)
+    consistency = round(min(1.0, active_weeks / observed_weeks), 2)
 
     # Longest gap between consecutive strength sessions (readaptation risk).
     days = sorted({a.start.date() for a in strength})
     longest_gap = max(
-        ((b - a).days for a, b in pairwise(days)), default=weeks * 7
+        ((b - a).days for a, b in pairwise(days)), default=round(observed_weeks * 7)
     )
 
     reasoning: list[str] = []
     notes: list[str] = []
+
+    # Garmin's web export caps the activity list (~20 rows). A round count over a
+    # short span is almost certainly truncated, so the true history is denser than
+    # this — worth saying, because it means the recommendation is a floor.
+    if observed_weeks < 10 and len(window) >= 20 and len(window) % 10 == 0:
+        notes.append(
+            f"only {len(window)} activities over ~{observed_weeks:.0f} weeks — this "
+            "looks like a truncated export, so your real history is denser and the "
+            "level below is a conservative floor"
+        )
 
     if not strength:
         recommendation = INICIANTE
@@ -102,8 +119,11 @@ def assess_level(
             "training, the Auto Check will correct this."
         )
     else:
+        # Recent frequency over the last ~8 weeks, but never dividing by more weeks
+        # than the data spans.
+        recent_window = min(8.0, observed_weeks)
         recent = [a for a in strength if a.start.date() >= today - timedelta(weeks=8)]
-        recent_per_week = len(recent) / 8
+        recent_per_week = len(recent) / recent_window
 
         # Consistency over the last two months is what actually gates the level.
         if recent_per_week >= 3 and consistency >= 0.6 and longest_gap <= 21:
