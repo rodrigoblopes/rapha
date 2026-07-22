@@ -165,3 +165,75 @@ produced the current target rather than presenting a number with no provenance.
 **sanity check only** — if measured TDEE and the formula disagree wildly, that indicates a data
 problem (a miscalibrated device, a missing week) and Rapha should say so rather than trust
 either silently.
+
+---
+
+## ADR-006 — Video transcription: local Whisper on the GPU, CUDA vendored into the venv
+
+**Date:** 2026-07-22
+
+ADR-004 chose local `faster-whisper` for the speech modules over a hosted transcriber, to keep
+purchased material off third-party servers. Making that actually run surfaced two decisions
+worth recording, because both are the kind of thing a future setup will hit again.
+
+**`ffmpeg` is a local binary, not a system install.** It is downloaded to
+`%RAPHA_HOME%\tools\ffmpeg.exe` and referenced by path — no PATH edit, no admin, no winget. This
+matches the project's "everything mutable lives outside the repo, nothing touches the system"
+posture, and it means the toolchain is reproducible by re-running one download rather than by
+remembering a global install. (The first mirror, gyan.dev, throttled to a crawl; the BtbN
+GitHub release served 160 MB in seconds. Prefer the latter.)
+
+**GPU inference needs CUDA 12 DLLs, and they are vendored into the venv, not installed
+system-wide.** CTranslate2 (faster-whisper's backend) fails with `cublas64_12.dll not found` on
+a bare machine. Rather than a system CUDA install, the `nvidia-cublas-cu12` and
+`nvidia-cudnn-cu12` pip wheels are installed into the venv and `tools/transcribe.py` adds their
+`bin` directories via `os.add_dll_directory` at startup. The entire CUDA dependency then lives
+inside `%RAPHA_HOME%\venv`, deletable with the venv, invisible to the rest of the machine. On
+the RTX 3070 the medium model runs comfortably; it falls back to CPU int8 if CUDA is absent.
+
+**Consequence:** transcription is resumable (already-done files are skipped) and self-contained.
+The transcripts land in `%RAPHA_HOME%\protocol\transcripts`, never the repo (ADR-002).
+
+**Payoff, concretely:** Módulo 17 (Como Progredir Cargas) transcribed cleanly, and its
+load-progression rule — the linchpin CLAUDE.md flagged — is now encoded in `rules/progression.py`
+from Cariani's own words rather than guessed. It is double progression autoregulated by movement
+quality; the engine reports the decision and reasoning and never prescribes a specific load.
+
+**Rejected:** a system-wide ffmpeg/CUDA install (pollutes the machine, not reproducible, needs
+admin). Also rejected CPU-only transcription as the default — it works and is the fallback, but
+the 3070 turns a multi-hour job into a manageable one for the full 6.2 GB.
+
+---
+
+## ADR-007 — Garmin first-login is rate-limited, and the "MFA" prompt is a red herring
+
+**Date:** 2026-07-22
+
+ADR-001 accepted the unofficial `garminconnect` client as the only personal route to Garmin.
+First contact exposed how it fails, and the failure actively misleads — worth pinning so it is
+not re-diagnosed from scratch.
+
+**What happens:** the mobile SSO endpoint returns a plain `429` after a few login attempts from
+one IP. The client falls back to the web *widget* flow, whose page title is the **generic**
+`GARMIN Authentication Application`. `garminconnect` matches `"authentication application"` as
+*email MFA* and calls the MFA prompt — asking for a code that was never sent, on an account that
+(verified) **has no MFA enabled**. Searching the whole mailbox, including spam, confirmed no code
+email ever arrives. The real problem is the `429`, not a missing code.
+
+**Decision:** treat a `429`-then-"MFA" sequence as **rate limiting, not an MFA challenge**. The
+correct response is to wait tens of minutes for the limit to decay and retry once, not to hunt
+for a code and not to hammer the endpoint (which extends the block). `rapha login --mfa-file`
+remains for genuine authenticator-app MFA; it is the wrong tool here.
+
+**Fallback investigated:** reusing Chrome's already-authenticated Garmin session by decrypting
+its cookies. It sidesteps the login entirely and stores no password. Two limits made it a
+user-gated option rather than a default: the harness classifier blocks the cookie-decryption
+script (it correctly pattern-matches credential theft), so it runs only if the user adds a Bash
+allow-rule; and Chrome 127+ App-Bound Encryption (`v20` cookies) defeats DPAPI-only decryption,
+so success is not guaranteed even with the rule. The DPAPI master key *did* decrypt in testing,
+so on a pre-v20 profile the route works.
+
+**Rejected:** driving the browser via the Claude Chrome extension — its tools are not connected
+to this session, so it was not available regardless. And Playwright as a *first* resort — it is
+more exposed than the mobile flow (Cloudflare bot detection, and it needs a stored password or a
+persistent profile), so it stays the last rung of the ladder in CLAUDE.md.

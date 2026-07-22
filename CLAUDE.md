@@ -178,9 +178,13 @@ typed once at `rapha login` and never written to disk.
 
 - The protocol is **60 days**, structured as numbered *fichas* that rotate on a schedule.
   Rapha tracks day N of 60 and which ficha is live. Rotating early or late breaks the method.
-- ⚠️ **The load-progression rule is the method.** It lives in Módulo 17 (video only) and must
-  be encoded from the transcript, not invented. If it is not yet extracted, Rapha must say so
-  and refuse to claim it is running Cariani's programme.
+- ⚠️ **The load-progression rule is the method** (Módulo 17, video only, now transcribed and
+  encoded in `rules/progression.py`). It is **double progression**: the ficha fixes the reps;
+  you find the load that hits that rep target with cadenced form; you progress the load *only*
+  when the target comes with facility, and you *hold* it when form breaks before the target.
+  Increments are the smallest plate (2.5 → 5 kg) or the next dumbbell. The engine reports the
+  decision and its reasoning; it **never prescribes a specific kilo** — only the lifter, feeling
+  the set, chooses that. Do not "helpfully" turn this into a fixed-percentage scheme.
 - Level (Iniciante / Intermediário / Avançado) is decided by Módulo 18's Auto Check **plus**
   the user's real Garmin training history — never guessed, never asked as a preference.
 - ⚠️ **Exercise names are Portuguese and Garmin's workout API uses a fixed enum.** Mapping is
@@ -240,6 +244,21 @@ HR, sleep, Body Battery) contradict the ficha's prescription, Rapha **says so an
 - **Workouts reach the watch over the air** once they exist in Connect (Connect → phone →
   watch). No cable is ever involved.
 - Tokens auto-refresh; full re-login only when the refresh token expires.
+- ⚠️ **First login is fragile, and the failure mode is misleading.** The mobile SSO endpoint
+  rate-limits an IP with a plain `429` after a few attempts, and the client then falls back to
+  the web *widget* flow. That widget's page title is `GARMIN Authentication Application` — a
+  **generic** SSO title — and `garminconnect` reads "authentication application" as *email MFA*
+  and asks for a code that was never sent. Verified 2026-07-22: **this account has no MFA**, no
+  code email ever arrives, and the real problem is the `429`. Do **not** chase an MFA code in
+  this situation. Wait for the rate limit to decay (tens of minutes) and retry; hammering it
+  extends the block. `rapha login --mfa-file` exists for genuine authenticator-app MFA, not for
+  this.
+- **Cookie-reuse fallback exists but is permission-gated.** Chrome holds a logged-in Garmin
+  session; decrypting its cookies to reuse it sidesteps the rate-limited login entirely. The
+  harness classifier blocks the decryption script by default (it pattern-matches credential
+  theft), so it runs only if the user adds a Bash allow-rule for the venv Python. Chrome 127+
+  App-Bound Encryption (`v20` cookies) defeats DPAPI-only decryption, so this route is not
+  guaranteed even with permission.
 
 ### Fallback ladder — the data is the requirement, the transport is negotiable
 
