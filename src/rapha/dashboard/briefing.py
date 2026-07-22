@@ -17,7 +17,7 @@ from typing import Any
 
 from ..db import Store
 from ..protocol import catalog
-from ..rules import cycle, menu
+from ..rules import cycle
 from ..rules.energy import Direction, recompose_direction
 from ..rules.recovery import assess_recovery
 from ..units import Grams, Kcal
@@ -214,54 +214,66 @@ def _training(programmes, st, today) -> dict:
 
 
 def _meals(days, diets, foods, cfg, st, today) -> dict:
-    weight = _recent_weight(days) or Grams(85_000)
-    # Measured TDEE over the window, minus the deficit.
     from ..rules.energy import measured_tdee
-    tdee = measured_tdee(days, window_days=cfg.tdee_window_days, today=today)
-    if tdee is None:
-        tdee = Kcal(2450)
+    from ..rules.targeted_menu import build_targeted_day
     from ..units import Rounding, apply_bps
+
+    weight = _recent_weight(days) or Grams(85_000)
+    tdee = measured_tdee(days, window_days=cfg.tdee_window_days, today=today) or Kcal(2450)
     target = Kcal(tdee.value - apply_bps(tdee, cfg.deficit_bps, Rounding.DOWN).value)
     protein_g = weight.value * cfg.protein_g_per_kg_x10 // 10000
 
-    bf10 = st.get("bodyfat_pct_x10")
-    direction, why = recompose_direction(bf10)
+    direction, why = recompose_direction(st.get("bodyfat_pct_x10"))
 
-    model = menu.choose_model(diets, target)
-    meals = []
-    if model:
-        anchor = st.get("train_anchor", "05:00")
-        times = _meal_times(anchor, len(model["meals"]))
-        for i, m in enumerate(model["meals"]):
-            alt = m["alternatives"][0] if m["alternatives"] else None
-            foods_txt = [_portion_text(p) for p in (alt["portions"] if alt else [])]
-            meals.append({
-                "number": m["number"],
-                "label": MEAL_LABELS.get(m["number"], f"Meal {m['number']}"),
-                "time": times[i] if i < len(times) else "",
-                "foods": foods_txt,
-            })
-        subs = {k: [[_portion_text(p) for p in a["portions"]] for a in v]
-                for k, v in (model.get("substitutions") or {}).items()}
-    else:
-        subs = {}
+    # Solve real portions to hit the target exactly, rather than costing a fixed
+    # model with fuzzy matches.
+    day = build_targeted_day(target, Grams(protein_g))
+    anchor = st.get("train_anchor", "05:00")
+    times = _meal_times(anchor, len(day.meals))
+    meals = [
+        {
+            "number": m.number,
+            "label": m.label,
+            "time": times[i] if i < len(times) else "",
+            "kcal": m.kcal,
+            "protein_g": m.protein_g,
+            "free": m.free,
+            "items": [
+                {"grams": it.grams, "food": it.name_en, "kcal": it.kcal,
+                 "protein_g": it.protein_dg // 10}
+                for it in m.items
+            ],
+        }
+        for i, m in enumerate(day.meals)
+    ]
+
+    split_p = round(day.total_protein.value * 4 / day.total_kcal.value * 100)
+    split_c = round(day.total_carb.value * 4 / day.total_kcal.value * 100)
+    split_f = round(day.total_fat.value * 9 / day.total_kcal.value * 100)
 
     return {
         "tdee_kcal": tdee.value,
         "target_kcal": target.value,
+        "actual_kcal": day.total_kcal.value,
         "protein_g": protein_g,
+        "actual_protein_g": day.total_protein.value,
+        "carb_g": day.total_carb.value,
+        "fat_g": day.total_fat.value,
+        "split": f"{split_p}% P · {split_c}% C · {split_f}% F",
         "deficit_pct": cfg.deficit_bps / 100,
         "direction": direction.value,
         "direction_why": why,
         "is_cut": direction is Direction.CUT,
-        "model_kcal": model["kcal"] if model else None,
         "meals": meals,
-        "substitutions": subs,
         "principles": [
-            f"Protein is the anchor: ~{protein_g} g/day protects muscle during the cut.",
-            "Carbohydrate around training; keep the biggest carb meals near your session.",
-            "Vegetables 'à vontade' — volume without calories keeps you full in a deficit.",
-            "Coffee is free (black or with sweetener).",
+            f"Protein is the anchor: {day.total_protein.value} g today protects muscle "
+            "while you strip fat — the one number not to miss.",
+            "Carbs cluster around training: your two biggest carb meals are breakfast "
+            "(post-workout) and lunch.",
+            "Vegetables and salad are free (à vontade) — volume keeps you full in the deficit.",
+            "Portions are weighable (nearest 5 g) and swap like-for-like: any lean protein "
+            "for another, any starch for another of equal grams.",
+            "Coffee is free, black or with sweetener.",
         ],
     }
 

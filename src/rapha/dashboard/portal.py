@@ -169,7 +169,7 @@ def _today_tab(b: dict) -> str:
     <div class="card" style="flex:1;min-width:240px">
       <h2>Eat · {meals.get('target_kcal','—')} kcal · {meals.get('protein_g','—')} g protein</h2>
       <div class="pill {'green' if meals.get('is_cut') else 'amber'}">{_e(meals.get('direction','').upper() or '—')}</div>
-      {f'<div class="note"><strong>{_e(first_meal["time"])}</strong> — {_e(first_meal["label"])}: {_e("; ".join(first_meal["foods"]))}</div>' if first_meal else ''}
+      {f'<div class="note"><strong>{_e(first_meal["time"])}</strong> — {_e(first_meal["label"])}: {_e("; ".join(str(it["grams"]) + "g " + it["food"] for it in first_meal.get("items", [])))}</div>' if first_meal else ''}
     </div>
   </div>
 </div>"""
@@ -229,39 +229,40 @@ def _meals_tab(b: dict) -> str:
     m = b.get("meals", {})
     meal_html = ""
     for meal in m.get("meals", []):
-        items = "".join(f"<li>{_e(f)}</li>" for f in meal["foods"])
+        items = "".join(
+            f'<li><strong>{_e(it["grams"])} g</strong> {_e(it["food"])} '
+            f'<span style="color:var(--dim)">· {_e(it["kcal"])} kcal</span></li>'
+            for it in meal.get("items", [])
+        )
         meal_html += (
-            f'<div class="meal"><div class="t">{_e(meal["time"])}</div>'
-            f'<div class="lbl">{_e(meal["label"])}</div><ul>{items}</ul></div>'
+            f'<div class="meal"><div class="t">{_e(meal["time"])} · '
+            f'{_e(meal["kcal"])} kcal · {_e(meal["protein_g"])} g protein</div>'
+            f'<div class="lbl">{_e(meal["label"])}</div><ul>{items}'
+            f'<li style="color:var(--accent)">+ {_e(meal.get("free",""))}</li></ul></div>'
         )
     principles = "".join(f"<li>{_e(p)}</li>" for p in m.get("principles", []))
-    subs = ""
-    for slot, options in (m.get("substitutions") or {}).items():
-        opts = "; &nbsp;".join("+ ".join(o) for o in options[:3])
-        subs += f'<div class="note"><strong>{_e(slot.title())}:</strong> {_e(opts)}</div>'
 
     return f"""
 <div class="tab" id="meals">
   <div class="card">
-    <h2>Today's targets</h2>
+    <h2>Today · hits your target exactly</h2>
     <div class="row">
-      {_stat(str(m.get("target_kcal","—")) + " kcal", "Intake target")}
-      {_stat(str(m.get("protein_g","—")) + " g", "Protein")}
-      {_stat(str(m.get("tdee_kcal","—")) + " kcal", "Measured TDEE")}
-      {_stat(m.get("direction","—").upper(), f"{m.get('deficit_pct','')}% deficit")}
+      {_stat(str(m.get("actual_kcal","—")) + " kcal", f"target {m.get('target_kcal','—')}")}
+      {_stat(str(m.get("actual_protein_g","—")) + " g", "protein")}
+      {_stat(str(m.get("carb_g","—")) + " g", "carbs")}
+      {_stat(str(m.get("fat_g","—")) + " g", "fat")}
     </div>
+    <div class="note"><strong>Split:</strong> {_e(m.get("split",""))} &nbsp;·&nbsp;
+      Measured TDEE {_e(m.get("tdee_kcal","—"))} kcal, {_e(m.get("deficit_pct",""))}% deficit</div>
+    <div style="margin-top:8px"><span class="pill {'green' if m.get('is_cut') else 'amber'}">{_e(m.get("direction","").upper())}</span></div>
     <div class="note">{_e(m.get("direction_why",""))}</div>
   </div>
   <div class="card">
-    <h2>Meals · from Cariani's {m.get('model_kcal','')} kcal model</h2>
+    <h2>Meals · weighed portions, timed to your training</h2>
     {meal_html}
   </div>
   <div class="card">
-    <h2>Swaps</h2>
-    {subs or '<div class="note">—</div>'}
-  </div>
-  <div class="card">
-    <h2>Principles</h2>
+    <h2>How to use it</h2>
     <ul class="note" style="padding-left:18px">{principles}</ul>
   </div>
 </div>"""
