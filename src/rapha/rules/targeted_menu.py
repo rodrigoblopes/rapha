@@ -71,16 +71,28 @@ class Supplement:
     source: str
 
 
-# Cariani validates creatine and whey (Módulo 24) but the module doses only whey
-# (40–60 g/day, 1–2×, in the longest meal gaps). It explains creatine's mechanism
-# without a number, so the dose here is the established evidence-based protocol —
-# flagged as such, not attributed to him.
+# Cariani validates creatine and whey and endorses pre-workout for the cut
+# (Módulo 24). He doses only whey (40–60 g/day, 1–2×, longest meal gaps) and
+# explains creatine's mechanism without a number.
+#
+# ⚠️ Reconciled with the athlete's own pre-workout: Gold Standard Pre (ON) provides
+# 3 g creatine + 175 mg caffeine per scoop (verified from ON's label 2026-07-22),
+# so the standalone creatine is adjusted to avoid double-dosing.
 SUPPLEMENTS: list[Supplement] = [
     Supplement(
-        "Creatine monohydrate", "5 g every day (training and rest days)",
-        "Any time — consistency matters more than timing. Easiest stirred into the "
-        "post-workout shake.",
-        "Evidence-based standard (Cariani validates creatine but gives no dose)",
+        "Pre-workout — Gold Standard (ON)", "1 scoop (~10 g) in water",
+        "15–30 min before training, fasted. Its 175 mg caffeine is exactly what "
+        "Cariani recommends before fasted morning training on a cut — caffeine drives "
+        "lipolysis and lifts metabolic rate (Módulo 24, fat-loss).",
+        "Athlete's supplement; timing/role endorsed by Projeto 60 Dias — Módulo 24",
+    ),
+    Supplement(
+        "Creatine monohydrate",
+        "5 g/day total. Your pre-workout already gives 3 g on training days — add "
+        "~2 g then; take the full 5 g on rest days.",
+        "Any time; daily consistency is what matters, not timing.",
+        "Evidence-based standard (Cariani validates creatine but gives no dose); "
+        "3 g already in the Gold Standard pre-workout",
     ),
     Supplement(
         "Whey protein", "30 g in ~200 ml skim milk (~31 g protein)",
