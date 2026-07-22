@@ -140,29 +140,34 @@ def _garmin_summary(cfg) -> dict | None:
 
 
 def cmd_report(args: argparse.Namespace) -> int:
-    from .dashboard import render
-    from .protocol import catalog
+    import shutil
+
+    from .dashboard import briefing as briefing_mod
+    from .dashboard import portal
 
     cfg = config.load()
-    programmes, diets = catalog.load(cfg.protocol_dir)
-    garmin = _garmin_summary(cfg)
+    b = briefing_mod.build(cfg)
 
-    body = render.render(programmes, diets, garmin)
-    path = render.write(cfg.dist_dir, body)
-    render.write_briefing(
-        cfg.dist_dir,
-        {
-            "generated": date.today().isoformat(),
-            "garmin": garmin,
-            "programmes": programmes,
-            "diets": diets,
-        },
-    )
+    # Copy converted progress photos into dist so the portal can serve them
+    # (dist is inside %RAPHA_HOME%, outside OneDrive, served on localhost only).
+    src_root = cfg.home / "data" / "photos"
+    dst_root = cfg.dist_dir / "photos"
+    if src_root.is_dir():
+        for pset in b["progress"].get("photo_sets", []):
+            src = src_root / pset["date"] / (pset.get("subdir") or "")
+            dst = dst_root / pset["date"]
+            dst.mkdir(parents=True, exist_ok=True)
+            for img in pset["images"]:
+                if (src / img).is_file():
+                    shutil.copy2(src / img, dst / img)
+
+    path = portal.write(cfg.dist_dir, b)
     print(f"portal written to {path}")
-    if not programmes:
+    print(f"  Today: day {b['overview']['day_of_60']}, recovery "
+          f"{b['overview']['recovery']['status']}, target "
+          f"{b['meals'].get('target_kcal','—')} kcal")
+    if not b["training"].get("available"):
         print("  (no protocol yet — run `rapha extract`)")
-    if not garmin:
-        print("  (no Garmin data yet — run `rapha login` then `rapha sync`)")
     return 0
 
 
