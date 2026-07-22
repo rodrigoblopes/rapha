@@ -199,6 +199,91 @@ def cmd_assess(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_plan(args: argparse.Namespace) -> int:
+    """Today's training day and a menu for the calorie target."""
+    from datetime import timedelta
+
+    from .protocol import catalog
+    from .rules import cycle, menu
+    from .rules.energy import predicted_bmr, recompose_direction
+
+    cfg = config.load()
+    programmes, diets = catalog.load(cfg.protocol_dir)
+    foods = catalog.load_foods(cfg.protocol_dir)
+    if not programmes:
+        print("no protocol yet — run `rapha extract` first", file=sys.stderr)
+        return 2
+
+    today = date.today()
+    start = date.fromisoformat(args.start) if args.start else today
+
+    # Training: pick the level's sheet (or the first trustworthy one) and resolve today.
+    sheet = next(
+        (p for p in programmes
+         if p["sessions"] and (not args.level or args.level.lower() in p["level"].lower())),
+        None,
+    )
+    print(f"\n=== Day {(today - start).days + 1} of 60 ===")
+    if sheet:
+        pos = cycle.resolve(sheet, start=start, today=today)
+        print(f"\nTraining ({sheet['level']}):")
+        if pos.is_rest:
+            print("  rest day")
+        elif pos.session_day is not None:
+            sess = next((s for s in sheet["sessions"] if s["day"] == pos.session_day), None)
+            print(f"  day {pos.session_day}: {pos.note}"
+                  + (f"  ({len(sess['exercises'])} exercises)" if sess else ""))
+        else:
+            print(f"  {pos.note}")
+
+    # Nutrition: measured TDEE if Garmin is present, else predicted BMR as a
+    # clearly-labelled fallback (ADR-005 keeps the formula a sanity check only).
+    target = None
+    basis = ""
+    if cfg.db_path.is_file():
+        from .db import Store
+        from .rules.energy import targets as energy_targets
+
+        with Store(cfg.db_path) as store:
+            days = store.daily_between(today - timedelta(days=60), today)
+            weight = store.latest_weight() or Grams(85_000)
+        et = energy_targets(
+            days, weight, window_days=cfg.tdee_window_days,
+            deficit_bps=cfg.deficit_bps, protein_g_per_kg_x10=cfg.protein_g_per_kg_x10,
+            today=today, height_mm=cfg.athlete_height_mm,
+            age_years=(today.year - cfg.athlete_birth_year) if cfg.athlete_birth_year else None,
+            sex=cfg.athlete_sex,
+        )
+        if et:
+            target, basis = et.intake, f"measured TDEE {et.tdee.value} kcal"
+    if target is None and cfg.athlete_height_mm and cfg.athlete_birth_year:
+        bmr = predicted_bmr(
+            Grams(85_000), cfg.athlete_height_mm,
+            today.year - cfg.athlete_birth_year, cfg.athlete_sex,
+        )
+        target = Kcal(bmr.value * 15 // 10)  # BMR x1.5 fallback, labelled below
+        basis = f"predicted BMR {bmr.value} x1.5 (NO Garmin data — a rough fallback)"
+
+    if target is None:
+        print("\nNutrition: need Garmin data or ATHLETE_* set for a calorie target.")
+        return 0
+
+    model = menu.choose_model(diets, target)
+    print(f"\nNutrition (target {target.value} kcal, from {basis}):")
+    dir_, why = recompose_direction(args.bodyfat_x10)
+    print(f"  direction: {dir_.value} — {why}")
+    if model:
+        index = menu.build_food_index(foods)
+        portions = [menu.cost_portion(p, foods, index) for p in menu.primary_portions(model)]
+        totals = menu.total_day(portions)
+        print(f"  model: {model['kcal']} kcal ({model['name'][:40]})")
+        print(f"  costed total: {totals.kcal.value} kcal  "
+              f"P{totals.protein.value}g C{totals.carb.value}g F{totals.fat.value}g")
+        if totals.unmatched:
+            print(f"  unmatched foods (macros not counted): {totals.unmatched}")
+    return 0
+
+
 def cmd_push(args: argparse.Namespace) -> int:
     """Create workouts in Garmin Connect. Dry-run by default (ADR-001)."""
     from .garmin.workout import RepStrategy, build_workout, describe
@@ -327,9 +412,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="actually create the workouts (otherwise dry-run)",
     )
 
+    p_plan = sub.add_parser("plan", help="today's training day and a menu")
+    p_plan.add_argument("--start", metavar="YYYY-MM-DD", help="protocol start date")
+    p_plan.add_argument("--level", help="filter to a level (e.g. Intermediário)")
+    p_plan.add_argument(
+        "--bodyfat-x10", type=int,
+        help="body-fat %% ×10 (e.g. 180 for 18%%) for the cut/bulk direction",
+    )
+
     for name, help_text in [
         ("assess", "decide the Projeto 60 Dias level from training history"),
-        ("plan", "next week's fichas and menu"),
         ("report", "render the portal"),
         ("serve", "serve the portal on 127.0.0.1"),
     ]:
@@ -343,6 +435,7 @@ HANDLERS = {
     "sync": cmd_sync,
     "extract": cmd_extract,
     "assess": cmd_assess,
+    "plan": cmd_plan,
     "push": cmd_push,
     "report": cmd_report,
     "serve": cmd_serve,
