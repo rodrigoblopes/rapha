@@ -12,6 +12,7 @@ from rapha.rules.menu import (
 )
 from rapha.units import Grams, Kcal
 
+
 def _food(number, name, kcal, p, c, f):
     return {"number": number, "name": name, "kcal": kcal,
             "protein_dg": p, "carb_dg": c, "fat_dg": f}
