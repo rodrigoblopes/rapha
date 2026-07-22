@@ -391,7 +391,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     p_extract = sub.add_parser(
-        "extract", help="parse the course into %RAPHA_HOME%/protocol"
+        "extract", help="parse the course into %%RAPHA_HOME%%/protocol"
     )
     p_extract.add_argument("--course", help="override COURSE_DIR")
 
