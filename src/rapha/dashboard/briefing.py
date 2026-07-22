@@ -38,25 +38,30 @@ def _state(cfg) -> dict:
     return {}
 
 
-def _meal_times(anchor: str, n: int) -> list[str]:
-    """Meal clock times, relative to the training anchor.
+def _fmt(t: datetime) -> str:
+    hour12 = t.hour % 12 or 12          # cross-platform 12-hour, no %-I
+    return f"{hour12}:{t.minute:02d} {'AM' if t.hour < 12 else 'PM'}"
 
-    Hours after the anchor. The first is the post-workout shake (~15 min after
-    training); the rest space out across the day. Falls back gracefully if the
-    meal count differs from the template.
+
+def _meal_times(anchor: str, n: int, *, session_min: int = 60) -> list[str]:
+    """Meal clock times, anchored to when training actually *ends*.
+
+    The anchor is when training STARTS; the post-workout shake lands ~10 min after
+    the session finishes (start + session_min + 10), not after the start — the bug
+    that put a "post-workout" shake mid-workout. Breakfast follows ~50 min later,
+    then the solid meals space across the day.
     """
     try:
         h, m = (int(x) for x in anchor.split(":"))
     except ValueError:
         h, m = 5, 0
-    base = datetime.combine(date.today(), time(h, m))
-    gaps = [0.25, 1.5, 7, 10.5, 13.5, 15.5]  # shake, breakfast, lunch, ...
-    out = []
-    for i in range(n):
-        t = base + timedelta(hours=gaps[i] if i < len(gaps) else 2.5 * i)
-        hour12 = t.hour % 12 or 12          # cross-platform 12-hour, no %-I
-        out.append(f"{hour12}:{t.minute:02d} {'AM' if t.hour < 12 else 'PM'}")
-    return out
+    start = datetime.combine(date.today(), time(h, m))
+    shake = start + timedelta(minutes=session_min + 10)   # post-workout
+    breakfast = shake + timedelta(minutes=50)
+    # Fixed clock times for the rest of the day, independent of the anchor.
+    fixed = [time(12, 0), time(15, 30), time(18, 30), time(20, 30)]
+    times = [shake, breakfast] + [datetime.combine(date.today(), t) for t in fixed]
+    return [_fmt(t) for t in times[:n]]
 
 
 def _portion_text(p: dict) -> str:
@@ -234,7 +239,8 @@ def _meals(days, diets, foods, cfg, st, today) -> dict:
     # model with fuzzy matches.
     day = build_targeted_day(target, Grams(protein_g))
     anchor = st.get("train_anchor", "05:00")
-    times = _meal_times(anchor, len(day.meals))
+    times = _meal_times(anchor, len(day.meals),
+                        session_min=int(st.get("train_duration_min", 60)))
     meals = [
         {
             "number": m.number,
