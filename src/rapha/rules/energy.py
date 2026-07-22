@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
+from enum import Enum
 
 from ..models import DailyMetrics
 from ..units import Grams, Kcal, Rounding, apply_bps, deficit_target, protein_target
@@ -24,6 +25,45 @@ MIN_DAYS_FOR_TDEE = 7
 
 #: Beyond this gap between measured and predicted, distrust the data.
 SANITY_GAP_BPS = 3000  # 30%
+
+#: Cariani's cut-vs-bulk threshold for men (Módulo 18): above this body-fat
+#: percentage, cut first; at or below it, a surplus is on the table. Body fat is
+#: carried ×10 to stay integer, so 15% is 150.
+CUT_BULK_THRESHOLD_BF_X10 = 150
+
+
+class Direction(Enum):
+    """Which way the energy target should point, per Módulo 18's 15% gate."""
+
+    CUT = "cut"          # body fat above ~15% -> deficit / definition
+    SURPLUS = "surplus"  # at or below ~15% -> mass phase is on the table
+    UNKNOWN = "unknown"   # no body-fat estimate yet
+
+
+def recompose_direction(bodyfat_pct_x10: int | None) -> tuple[Direction, str]:
+    """Cariani's rule: a man cuts until ~15% body fat, then may bulk (Módulo 18).
+
+    Returns the direction and a one-line reason. ``None`` (no estimate yet) is not
+    assumed to be either — the honest answer is that the direction is not yet known,
+    and the measurement series decides it.
+    """
+    if bodyfat_pct_x10 is None:
+        return (
+            Direction.UNKNOWN,
+            "No body-fat estimate yet. Log waist/neck (Navy) or a scale reading; "
+            "Cariani gates cut-vs-bulk on ~15% body fat and the direction follows it.",
+        )
+    if bodyfat_pct_x10 > CUT_BULK_THRESHOLD_BF_X10:
+        return (
+            Direction.CUT,
+            f"Estimated {bodyfat_pct_x10 / 10:.0f}% body fat is above Cariani's ~15% "
+            "gate — a deficit/definition phase is the framework's direction (M18).",
+        )
+    return (
+        Direction.SURPLUS,
+        f"Estimated {bodyfat_pct_x10 / 10:.0f}% body fat is at or below ~15% — a "
+        "surplus for mass is on the table; cutting further is no longer indicated (M18).",
+    )
 
 
 def measured_tdee(
@@ -49,13 +89,17 @@ def measured_tdee(
 def predicted_bmr(
     weight: Grams, height_mm: int, age_years: int, sex: str
 ) -> Kcal:
-    """Mifflin-St Jeor, in integers. A cross-check, never the primary source."""
-    kg_x10 = weight.value // 100          # grams -> kg x 10
-    cm_x10 = height_mm                    # mm    -> cm x 10
-    # 10*kg + 6.25*cm - 5*age + (5 | -161), scaled by 10 then divided back.
-    scaled = 100 * kg_x10 + 625 * cm_x10 // 10 - 50 * age_years
-    scaled += 50 if sex.upper().startswith("M") else -1610
-    return Kcal(scaled // 10)
+    """Mifflin-St Jeor, in integers. A cross-check, never the primary source.
+
+    BMR = 10·kg + 6.25·cm − 5·age + (5 for men, −161 for women).
+    In integer terms: 10·kg is exactly ``kg_x10`` (grams÷100), and 6.25·cm is
+    ``625·cm_x10 ÷ 1000`` with cm_x10 being the height in mm (= cm×10).
+    """
+    kg_x10 = weight.value // 100   # grams -> kg × 10, so this term IS 10·kg
+    cm_x10 = height_mm             # mm == cm × 10
+    bmr = kg_x10 + (625 * cm_x10) // 1000 - 5 * age_years
+    bmr += 5 if sex.upper().startswith("M") else -161
+    return Kcal(bmr)
 
 
 @dataclass(frozen=True, slots=True)

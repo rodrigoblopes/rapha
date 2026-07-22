@@ -207,6 +207,26 @@ typed once at `rapha login` and never written to disk.
   invent a diet from scratch.
 - Menu constraints are hard, not preferences: **household-compatible, batch-cooked,
   Brazilian staples where possible**, sourced from Australian supermarkets.
+- ⚠️ **The cut-vs-bulk gate (Módulo 18, now transcribed).** Cariani's own rule: a man above
+  **~15% body fat cuts first** (definition, calorie deficit, carbohydrate cycling); only at
+  **≤15%** does he switch to a surplus for mass. So `DEFICIT_BPS` being a *deficit* is correct
+  *only while* estimated body fat is above ~15% — which is almost certainly the case at the
+  starting point. When the measurement series (below) shows ~15%, the direction flips to
+  maintenance/surplus, and Rapha must surface that rather than keep cutting on autopilot.
+
+### Módulo 18 Auto Check — the measurement ritual (video, transcribed)
+
+Auto Check is an **anthropometric self-assessment repeated every 15 days**, not a one-off level
+quiz. Log with a tape: **chest, arm (relaxed; plus *contracted* if intermediate/advanced),
+waist at the navel relaxed, hip, thigh (both), calf (both), height, and wingspan**. Two
+classifications follow: **build** from height-vs-wingspan (brevilíneo < normolíneo < longilíneo)
+and **somatotype** (ecto/meso/endo), with **body-fat % read off Cariani's photo reference chart**
+(men 8/12/15/20/25/30/35). The level split is by *training history and existing muscle*, which is
+what makes it a shared human-plus-data call — the contracted measurements exist precisely because
+an intermediate/advanced trainee already has muscle to contract. Rapha's `rules/level.py` supplies
+the **objective Garmin-history half**; the person supplies the Auto Check half. This is why the
+`Measurement` model carries waist/neck for the Navy estimate and why photos go to
+`%RAPHA_HOME%\data\photos\<date>\` on a 15-day cadence.
 
 ### Body composition without a scale
 
