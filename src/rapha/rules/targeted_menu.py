@@ -57,8 +57,10 @@ CURATED: dict[str, Food] = {
     "feijao": Food("carioca beans, cooked", 76, 48, 136, 5, "TACO #464"),
     "banana": Food("banana", 92, 14, 238, 1, "TACO #159"),
     "azeite": Food("olive oil", 884, 0, 0, 1000, "TACO #—"),
-    # Supplements the athlete already uses; standard per-100g values.
-    "whey": Food("whey protein", 380, 800, 80, 60, "label (STD)"),
+    # Supplements the athlete uses. Whey = Gold Standard 100% Whey (ON), from its
+    # label: 24 g protein / 120 kcal / 3 g carb / 1.5 g fat per ~30 g scoop.
+    "whey": Food("whey — Gold Standard 100% Whey (ON)", 400, 800, 100, 50,
+                 "ON label (per 30 g scoop: 24 g P, 120 kcal)"),
     "leite_desnatado": Food("skim milk", 35, 34, 49, 1, "STD"),
 }
 
@@ -95,10 +97,11 @@ SUPPLEMENTS: list[Supplement] = [
         "3 g already in the Gold Standard pre-workout",
     ),
     Supplement(
-        "Whey protein", "30 g in ~200 ml skim milk (~31 g protein)",
+        "Whey — Gold Standard 100% Whey (ON)",
+        "1 scoop (30 g) in ~200 ml skim milk (~24 g whey + ~7 g milk protein = ~31 g)",
         "Post-workout, in the longest gap between solid meals — keeps amino acids "
         "flowing (Módulo 24).",
-        "Projeto 60 Dias — Módulo 24 (Suplementação)",
+        "Projeto 60 Dias — Módulo 24; macros from the ON label",
     ),
 ]
 
