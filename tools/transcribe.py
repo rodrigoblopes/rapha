@@ -32,6 +32,33 @@ import tempfile
 import time
 from pathlib import Path
 
+# The Windows console is cp1252; module names and log arrows are not. Force UTF-8
+# so a print of a Portuguese module title does not crash the whole run.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+
+def _add_cuda_dlls_to_path() -> None:
+    """Put the pip-installed CUDA runtime DLLs on the search path.
+
+    CTranslate2 (faster-whisper's backend) needs cublas64_12.dll and cudnn on the
+    DLL path for GPU inference. The nvidia-*-cu12 wheels ship them under
+    site-packages/nvidia/*/bin but do not register them, so a bare GPU run fails
+    with "cublas64_12.dll not found". Adding them here keeps the whole CUDA
+    dependency inside the venv rather than on the system.
+    """
+    import sysconfig
+
+    site = Path(sysconfig.get_paths()["purelib"]) / "nvidia"
+    if not site.is_dir():
+        return
+    for bin_dir in site.glob("*/bin"):
+        os.add_dll_directory(str(bin_dir))
+        os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
+
+
+_add_cuda_dlls_to_path()
+
 HOME = Path(os.environ.get("RAPHA_HOME", Path.home() / ".rapha"))
 FFMPEG = HOME / "tools" / "ffmpeg.exe"
 OUT = HOME / "protocol" / "transcripts"
@@ -73,11 +100,11 @@ def transcribe_module(model, module: Path) -> dict:
     for video in videos:
         target = module_out / f"{video.stem}.txt"
         if target.exists() and target.stat().st_size > 0:
-            print(f"    · {video.name} (already done)", flush=True)
+            print(f"    - {video.name} (already done)", flush=True)
             done.append(target.name)
             continue
 
-        print(f"    → {video.name}", flush=True)
+        print(f"    >> {video.name}", flush=True)
         with tempfile.TemporaryDirectory() as tmp:
             wav = Path(tmp) / "audio.wav"
             extract_audio(video, wav)

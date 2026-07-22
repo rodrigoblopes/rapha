@@ -199,6 +199,74 @@ def cmd_assess(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_push(args: argparse.Namespace) -> int:
+    """Create workouts in Garmin Connect. Dry-run by default (ADR-001)."""
+    from .garmin.workout import RepStrategy, build_workout, describe
+    from .protocol import catalog
+
+    cfg = config.load()
+    programmes, _ = catalog.load(cfg.protocol_dir)
+    if not programmes:
+        print("no protocol yet — run `rapha extract` first", file=sys.stderr)
+        return 2
+
+    # Pick the requested sheet, or the first trustworthy one.
+    chosen = None
+    for p in programmes:
+        if args.sheet and args.sheet.lower() not in p["source_file"].lower():
+            continue
+        if p["sessions"]:
+            chosen = p
+            break
+    if chosen is None:
+        print("no matching sheet with sessions", file=sys.stderr)
+        return 1
+
+    strategy = RepStrategy.REPS if args.reps else RepStrategy.TIME
+    day_filter = args.day
+    built = []
+    for session in chosen["sessions"]:
+        if day_filter and session["day"] != day_filter:
+            continue
+        name = f"P60D {chosen['level']} D{session['day']} — {session['focus']}"[:60]
+        built.append((session, build_workout(session, name=name, strategy=strategy)))
+
+    print(f"\nsheet: {chosen['source_file']}  ({chosen['level']})")
+    print(f"strategy: {strategy.value}"
+          + ("" if args.reps else "  (reps ride in the step note; see ADR-001)"))
+    for _, result in built:
+        print("\n" + describe(result))
+
+    if not args.confirm:
+        print(
+            "\n-- DRY RUN. Nothing was sent to Garmin. --\n"
+            "Re-run with --confirm to create these workouts. If reps do not render "
+            "on your watch, drop --reps and the rep counts stay in each step's note."
+        )
+        return 0
+
+    from .garmin import write
+    from .garmin.auth import NotAuthenticated
+
+    try:
+        created = []
+        for session, result in built:
+            if result.unmapped:
+                print(f"  day {session['day']}: skipping unmapped "
+                      f"{sorted(set(result.unmapped))}")
+            wid = write.create_workout(cfg, result.payload)
+            created.append(wid)
+            if args.schedule:
+                write.schedule_workout(cfg, wid, args.schedule)
+            print(f"  created workout {wid} for day {session['day']}"
+                  + (f", scheduled {args.schedule}" if args.schedule else ""))
+        print(f"\ncreated {len(created)} workouts.")
+    except NotAuthenticated as e:
+        print(f"\n{e}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from .server import serve
 
@@ -241,10 +309,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_extract.add_argument("--course", help="override COURSE_DIR")
 
+    p_push = sub.add_parser(
+        "push", help="create workouts in Garmin Connect (dry-run by default)"
+    )
+    p_push.add_argument("--sheet", help="filter to a sheet by filename fragment")
+    p_push.add_argument("--day", type=int, help="only this training day")
+    p_push.add_argument(
+        "--reps",
+        action="store_true",
+        help="use rep-based end conditions (UNVERIFIED on the watch — ADR-001); "
+        "without it, reps ride in each step's note and the step is lap-button",
+    )
+    p_push.add_argument("--schedule", metavar="YYYY-MM-DD", help="schedule to a date")
+    p_push.add_argument(
+        "--confirm",
+        action="store_true",
+        help="actually create the workouts (otherwise dry-run)",
+    )
+
     for name, help_text in [
         ("assess", "decide the Projeto 60 Dias level from training history"),
         ("plan", "next week's fichas and menu"),
-        ("push", "create workouts in Garmin Connect (dry-run by default)"),
         ("report", "render the portal"),
         ("serve", "serve the portal on 127.0.0.1"),
     ]:
@@ -258,6 +343,7 @@ HANDLERS = {
     "sync": cmd_sync,
     "extract": cmd_extract,
     "assess": cmd_assess,
+    "push": cmd_push,
     "report": cmd_report,
     "serve": cmd_serve,
 }
