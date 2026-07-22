@@ -12,13 +12,25 @@ from rapha.rules.menu import (
 )
 from rapha.units import Grams, Kcal
 
+def _food(number, name, kcal, p, c, f):
+    return {"number": number, "name": name, "kcal": kcal,
+            "protein_dg": p, "carb_dg": c, "fat_dg": f}
+
+
 FOODS = [
-    {"number": 1, "name": "Arroz, tipo 1, cozido", "kcal": 128, "protein_dg": 25, "carb_dg": 281, "fat_dg": 2},
-    {"number": 2, "name": "Arroz, doce", "kcal": 200, "protein_dg": 30, "carb_dg": 400, "fat_dg": 20},
-    {"number": 3, "name": "Frango, peito, grelhado", "kcal": 159, "protein_dg": 320, "carb_dg": 0, "fat_dg": 25},
-    {"number": 4, "name": "Batata, doce, cozida", "kcal": 77, "protein_dg": 6, "carb_dg": 184, "fat_dg": 1},
+    _food(1, "Arroz, tipo 1, cozido", 128, 25, 281, 2),
+    _food(2, "Arroz, doce", 200, 30, 400, 20),
+    _food(3, "Frango, peito, grelhado", 159, 320, 0, 25),
+    _food(4, "Batata, doce, cozida", 77, 6, 184, 1),
 ]
 INDEX = build_food_index(FOODS)
+
+DIETS = [
+    {"kcal": 1500, "warnings": [], "meals": []},
+    {"kcal": 2000, "warnings": [], "meals": []},
+    {"kcal": 2500, "warnings": [], "meals": []},
+    {"kcal": 3000, "warnings": ["half parsed"], "meals": []},
+]
 
 
 class TestFoodMatching:
@@ -97,19 +109,12 @@ class TestTotalsAreHonest:
 
 
 class TestModelSelection:
-    DIETS = [
-        {"kcal": 1500, "warnings": [], "meals": []},
-        {"kcal": 2000, "warnings": [], "meals": []},
-        {"kcal": 2500, "warnings": [], "meals": []},
-        {"kcal": 3000, "warnings": ["half parsed"], "meals": []},
-    ]
-
     def test_the_nearest_calorie_model_is_chosen(self):
-        assert choose_model(self.DIETS, Kcal(2100))["kcal"] == 2000
+        assert choose_model(DIETS, Kcal(2100))["kcal"] == 2000
 
     def test_a_warned_model_is_never_chosen_even_if_nearest(self):
         # 3000 is nearest to 2900, but it is half-parsed, so 2500 wins.
-        assert choose_model(self.DIETS, Kcal(2900))["kcal"] == 2500
+        assert choose_model(DIETS, Kcal(2900))["kcal"] == 2500
 
     def test_no_usable_model_returns_none(self):
         assert choose_model([{"kcal": None, "warnings": []}], Kcal(2000)) is None
