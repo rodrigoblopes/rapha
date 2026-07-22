@@ -222,6 +222,17 @@ def _training_tab(b: dict) -> str:
     <div class="gsheet" id="gsheet">{sheet}</div>
     <button class="copy" id="copybtn" onclick="copyGarmin()">Copy workout for Garmin Connect</button>
   </div>
+  <div class="card">
+    <h2>All workouts — set up Garmin once</h2>
+    <div class="note">The full rotation (all training days of this sheet) as one sheet
+      you build once in Garmin Connect. Open it, or hand it to Claude in Chrome.</div>
+    <div style="margin-top:10px">
+      <a class="copy" style="text-decoration:none;display:inline-block"
+         href="/workouts.md" target="_blank">Open all workouts (workouts.md)</a>
+      &nbsp;<a class="tag" href="/workouts.json" target="_blank"
+         style="padding:8px 12px">workouts.json</a>
+    </div>
+  </div>
 </div>"""
 
 

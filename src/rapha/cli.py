@@ -381,6 +381,46 @@ def cmd_push(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_workouts(args: argparse.Namespace) -> int:
+    """Export every workout in the current sheet, ready for Garmin Connect."""
+    from .dashboard import workouts_export
+    from .dashboard.briefing import _live_sheet, _state
+    from .protocol import catalog
+
+    cfg = config.load()
+    programmes, _ = catalog.load(cfg.protocol_dir)
+    if not programmes:
+        print("no protocol yet — run `rapha extract` first", file=sys.stderr)
+        return 2
+
+    st = _state(cfg)
+    if args.sheet:
+        sheet = next((p for p in programmes
+                      if str(args.sheet) in p["source_file"] and p["sessions"]), None)
+    else:
+        sheet = _live_sheet(programmes, st)
+    if not sheet:
+        print("no matching sheet with sessions", file=sys.stderr)
+        return 1
+
+    workouts = workouts_export.build_sheet_workouts(sheet)
+    md = workouts_export.to_markdown(sheet, workouts)
+    js = workouts_export.to_json(sheet, workouts)
+
+    cfg.dist_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.dist_dir / "workouts.md").write_text(md, encoding="utf-8")
+    (cfg.dist_dir / "workouts.json").write_text(js, encoding="utf-8")
+
+    print(f"{len(workouts)} workouts from {sheet['source_file']} ({sheet['level']}):")
+    for w in workouts:
+        flag = f"  ⚠ {len(w['unmapped'])} to enter by hand" if w["unmapped"] else ""
+        print(f"  {w['name']}  ({len(w['steps'])} exercises){flag}")
+    print(f"\nwritten to:\n  {cfg.dist_dir / 'workouts.md'}\n  {cfg.dist_dir / 'workouts.json'}")
+    print(f"served at:\n  http://127.0.0.1:{cfg.portal_port}/workouts.md")
+    print("\nHand workouts.md to Claude in Chrome to build them in Garmin Connect.")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from .server import serve
 
@@ -454,6 +494,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="body-fat %% ×10 (e.g. 180 for 18%%) for the cut/bulk direction",
     )
 
+    p_workouts = sub.add_parser(
+        "workouts", help="export all workouts in the current sheet for Garmin Connect"
+    )
+    p_workouts.add_argument("--sheet", help="sheet filename fragment (default: current)")
+
     for name, help_text in [
         ("assess", "decide the Projeto 60 Dias level from training history"),
         ("report", "render the portal"),
@@ -472,6 +517,7 @@ HANDLERS = {
     "assess": cmd_assess,
     "plan": cmd_plan,
     "push": cmd_push,
+    "workouts": cmd_workouts,
     "report": cmd_report,
     "serve": cmd_serve,
 }

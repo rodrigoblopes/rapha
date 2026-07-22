@@ -32,6 +32,12 @@ class TestExerciseMapping:
         assert map_exercise("CADEIRA ABDUTORA").name == "HIP_ABDUCTION"
         assert map_exercise("CADEIRA EXTENSORA").name == "LEG_EXTENSIONS"
 
+    def test_prancha_abdominal_is_a_plank_not_a_crunch(self):
+        # "abdominal" alone → CRUNCH, but a "prancha abdominal" is a timed plank.
+        assert map_exercise("PRANCHA ABDOMINAL").category == "PLANK"
+        assert map_exercise("Prancha").category == "PLANK"
+        assert map_exercise("Abdominal Crunch").category == "CRUNCH"
+
 
 SESSION = {
     "day": 1,

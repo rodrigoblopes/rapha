@@ -100,7 +100,12 @@ _TABLE: list[tuple[str, GarminExercise]] = [
     ("triceps testa", GarminExercise("TRICEPS_EXTENSION", "LYING_TRICEPS_EXTENSION")),
     ("triceps frances", GarminExercise("TRICEPS_EXTENSION", "OVERHEAD_TRICEPS_EXTENSION")),
     ("triceps", GarminExercise("TRICEPS_EXTENSION", "TRICEPS_PUSHDOWN")),
-    # core
+    # core / lower back
+    ("hiperextensao", GarminExercise("HYPEREXTENSION", "HYPEREXTENSION")),
+    ("lombar", GarminExercise("HYPEREXTENSION", "HYPEREXTENSION")),
+    # Compound key wins by length over the bare "abdominal" → CRUNCH, so a
+    # "prancha abdominal" is a plank (a timed hold), not a crunch.
+    ("prancha abdominal", GarminExercise("PLANK", "PLANK")),
     ("prancha", GarminExercise("PLANK", "PLANK")),
     ("abdominal", GarminExercise("CRUNCH", "CRUNCH")),
     ("crunch", GarminExercise("CRUNCH", "CRUNCH")),
