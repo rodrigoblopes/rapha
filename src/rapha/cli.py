@@ -166,6 +166,39 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_assess(args: argparse.Namespace) -> int:
+    from datetime import timedelta
+
+    from .db import Store
+    from .rules.level import assess_level
+
+    cfg = config.load()
+    if not cfg.db_path.is_file():
+        print("no Garmin data yet — run `rapha login` then `rapha sync`", file=sys.stderr)
+        return 2
+
+    today = date.today()
+    with Store(cfg.db_path) as store:
+        acts = store.activities_between(today - timedelta(weeks=53), today)
+
+    ev = assess_level(acts, today=today)
+    print(f"\nRecommended level: {ev.recommendation}  ->  {ev.module}\n")
+    print(f"  strength sessions (52wk):  {ev.strength_sessions}")
+    print(f"  sessions/week:             {ev.sessions_per_week}")
+    print(f"  weeks with a session:      {ev.active_weeks}/{ev.weeks_observed} "
+          f"({ev.consistency:.0%})")
+    print(f"  longest gap:               {ev.longest_gap_days} days")
+    print("\n  reasoning:")
+    for r in ev.reasoning:
+        print(f"    - {r}")
+    for n in ev.notes:
+        print(f"    ! {n}")
+    if ev.provisional:
+        print("\n  This is provisional. It is a values-and-safety call, not a verdict —")
+        print("  the final level is yours.")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from .server import serve
 
@@ -224,6 +257,7 @@ HANDLERS = {
     "login": cmd_login,
     "sync": cmd_sync,
     "extract": cmd_extract,
+    "assess": cmd_assess,
     "report": cmd_report,
     "serve": cmd_serve,
 }
