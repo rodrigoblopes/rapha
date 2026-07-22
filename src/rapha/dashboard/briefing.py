@@ -39,16 +39,21 @@ def _state(cfg) -> dict:
 
 
 def _meal_times(anchor: str, n: int) -> list[str]:
-    """Space the day's meals out from ~90 min after the training anchor."""
+    """Meal clock times, relative to the training anchor.
+
+    Hours after the anchor. The first is the post-workout shake (~15 min after
+    training); the rest space out across the day. Falls back gracefully if the
+    meal count differs from the template.
+    """
     try:
         h, m = (int(x) for x in anchor.split(":"))
     except ValueError:
         h, m = 5, 0
-    first = datetime.combine(date.today(), time(h, m)) + timedelta(minutes=90)
-    gaps = [0, 5.5, 9, 13.5, 15.5]  # hours after the first meal, per meal index
+    base = datetime.combine(date.today(), time(h, m))
+    gaps = [0.25, 1.5, 7, 10.5, 13.5, 15.5]  # shake, breakfast, lunch, ...
     out = []
     for i in range(n):
-        t = first + timedelta(hours=gaps[i] if i < len(gaps) else 3 * i)
+        t = base + timedelta(hours=gaps[i] if i < len(gaps) else 2.5 * i)
         hour12 = t.hour % 12 or 12          # cross-platform 12-hour, no %-I
         out.append(f"{hour12}:{t.minute:02d} {'AM' if t.hour < 12 else 'PM'}")
     return out
@@ -265,6 +270,10 @@ def _meals(days, diets, foods, cfg, st, today) -> dict:
         "direction_why": why,
         "is_cut": direction is Direction.CUT,
         "meals": meals,
+        "supplements": [
+            {"name": s.name, "dose": s.dose, "when": s.when, "source": s.source}
+            for s in day.supplements
+        ],
         "principles": [
             f"Protein is the anchor: {day.total_protein.value} g today protects muscle "
             "while you strip fat — the one number not to miss.",

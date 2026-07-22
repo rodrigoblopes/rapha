@@ -241,6 +241,12 @@ def _meals_tab(b: dict) -> str:
             f'<li style="color:var(--accent)">+ {_e(meal.get("free",""))}</li></ul></div>'
         )
     principles = "".join(f"<li>{_e(p)}</li>" for p in m.get("principles", []))
+    supp_html = "".join(
+        f'<div class="meal"><div class="lbl">{_e(s["name"])} — {_e(s["dose"])}</div>'
+        f'<div class="note">{_e(s["when"])}</div>'
+        f'<div class="note" style="font-size:11px">{_e(s["source"])}</div></div>'
+        for s in m.get("supplements", [])
+    ) or '<div class="note">—</div>'
 
     return f"""
 <div class="tab" id="meals">
@@ -260,6 +266,10 @@ def _meals_tab(b: dict) -> str:
   <div class="card">
     <h2>Meals · weighed portions, timed to your training</h2>
     {meal_html}
+  </div>
+  <div class="card">
+    <h2>Supplements</h2>
+    {supp_html}
   </div>
   <div class="card">
     <h2>How to use it</h2>

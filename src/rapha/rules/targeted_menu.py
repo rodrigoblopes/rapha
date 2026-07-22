@@ -57,7 +57,38 @@ CURATED: dict[str, Food] = {
     "feijao": Food("carioca beans, cooked", 76, 48, 136, 5, "TACO #464"),
     "banana": Food("banana", 92, 14, 238, 1, "TACO #159"),
     "azeite": Food("olive oil", 884, 0, 0, 1000, "TACO #—"),
+    # Supplements the athlete already uses; standard per-100g values.
+    "whey": Food("whey protein", 380, 800, 80, 60, "label (STD)"),
+    "leite_desnatado": Food("skim milk", 35, 34, 49, 1, "STD"),
 }
+
+
+@dataclass(frozen=True, slots=True)
+class Supplement:
+    name: str
+    dose: str
+    when: str
+    source: str
+
+
+# Cariani validates creatine and whey (Módulo 24) but the module doses only whey
+# (40–60 g/day, 1–2×, in the longest meal gaps). It explains creatine's mechanism
+# without a number, so the dose here is the established evidence-based protocol —
+# flagged as such, not attributed to him.
+SUPPLEMENTS: list[Supplement] = [
+    Supplement(
+        "Creatine monohydrate", "5 g every day (training and rest days)",
+        "Any time — consistency matters more than timing. Easiest stirred into the "
+        "post-workout shake.",
+        "Evidence-based standard (Cariani validates creatine but gives no dose)",
+    ),
+    Supplement(
+        "Whey protein", "30 g in ~200 ml skim milk (~31 g protein)",
+        "Post-workout, in the longest gap between solid meals — keeps amino acids "
+        "flowing (Módulo 24).",
+        "Projeto 60 Dias — Módulo 24 (Suplementação)",
+    ),
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,25 +125,32 @@ class TargetedDay:
     total_protein: Grams
     total_carb: Grams
     total_fat: Grams
+    supplements: list[Supplement] = field(default_factory=list)
 
 
 # The template: which foods, in which meal, and their role.
 #   role "p" = protein-food (scaled by a), "c" = carb-food (scaled by b),
-#   "fix" = fixed grams (olive oil).  base_g is the starting portion.
+#   "fix" = fixed grams (olive oil, and the whey shake — a fixed 30 g scoop).
+# The shake's protein is fixed, so the solver scales the SOLID protein foods down
+# to keep the day on target — Cariani's rule that whey supplements, never replaces,
+# the solid sources.
 _TEMPLATE: list[tuple[int, str, list[tuple[str, str, int]]]] = [
-    (1, "Breakfast (post-workout)", [
+    (1, "Post-workout shake", [
+        ("whey", "fix", 30), ("leite_desnatado", "fix", 200),
+    ]),
+    (2, "Breakfast", [
         ("ovo", "p", 100), ("clara", "p", 90), ("aveia", "c", 40), ("banana", "c", 100),
     ]),
-    (2, "Lunch", [
+    (3, "Lunch", [
         ("arroz", "c", 120), ("feijao", "c", 80), ("frango", "p", 150), ("azeite", "fix", 15),
     ]),
-    (3, "Afternoon", [
+    (4, "Afternoon", [
         ("arroz", "c", 100), ("patinho", "p", 120),
     ]),
-    (4, "Dinner", [
+    (5, "Dinner", [
         ("batata_doce", "c", 180), ("peixe", "p", 150), ("azeite", "fix", 15),
     ]),
-    (5, "Supper", [
+    (6, "Supper", [
         ("frango_desfiado", "p", 100),
     ]),
 ]
@@ -179,4 +217,5 @@ def build_targeted_day(target_kcal: Kcal, protein: Grams) -> TargetedDay:
         total_protein=Grams(tp // 10),
         total_carb=Grams(tc // 10),
         total_fat=Grams(tf // 10),
+        supplements=list(SUPPLEMENTS),
     )

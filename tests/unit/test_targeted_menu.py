@@ -32,10 +32,26 @@ class TestItHitsTheTargets:
 class TestTheMealsAreReal:
     def test_every_meal_has_foods_with_grams(self):
         day = build_targeted_day(Kcal(2050), Grams(161))
-        assert len(day.meals) == 5
+        assert len(day.meals) == 6  # post-workout shake + five meals
         for meal in day.meals:
             assert meal.items
             assert all(it.grams > 0 for it in meal.items)
+
+    def test_the_whey_shake_is_a_fixed_moment(self):
+        day = build_targeted_day(Kcal(2050), Grams(161))
+        shake = day.meals[0]
+        assert shake.label == "Post-workout shake"
+        foods = {it.food for it in shake.items}
+        assert "whey" in foods and "leite_desnatado" in foods
+        # It stays a 30 g scoop regardless of the target — the SOLID protein scales.
+        whey = next(it for it in shake.items if it.food == "whey")
+        assert whey.grams == 30
+
+    def test_supplements_include_creatine_and_whey(self):
+        day = build_targeted_day(Kcal(2050), Grams(161))
+        names = {s.name for s in day.supplements}
+        assert "Creatine monohydrate" in names
+        assert "Whey protein" in names
 
     def test_portions_are_rounded_to_something_weighable(self):
         day = build_targeted_day(Kcal(2050), Grams(161))
