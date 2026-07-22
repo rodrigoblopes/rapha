@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from itertools import pairwise
 
 from ..models import Activity
 
@@ -84,7 +85,7 @@ def assess_level(
     # Longest gap between consecutive strength sessions (readaptation risk).
     days = sorted({a.start.date() for a in strength})
     longest_gap = max(
-        ((b - a).days for a, b in zip(days, days[1:], strict=False)), default=weeks * 7
+        ((b - a).days for a, b in pairwise(days)), default=weeks * 7
     )
 
     reasoning: list[str] = []

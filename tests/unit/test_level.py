@@ -71,7 +71,7 @@ class TestItResolvesDownwardUnderAmbiguity:
         assert result.recommendation != AVANCADO
 
     def test_a_long_gap_is_flagged_as_readaptation_risk(self):
-        acts = [strength_session(date(2026, 1, 5))] + weekly_sessions(3, 6)
+        acts = [strength_session(date(2026, 1, 5)), *weekly_sessions(3, 6)]
         result = assess_level(acts, today=TODAY)
         assert any("readapt" in n for n in result.notes)
 
