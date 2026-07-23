@@ -101,6 +101,13 @@ function copyGarmin(){
     setTimeout(()=>b.innerText='Copy workout for Garmin Connect',1500);
   });
 }
+function togglePhotos(btn){
+  // Photos are hidden by default; this reveals them on demand.
+  const w=document.getElementById('photowrap');
+  const shown=w.style.display!=='none';
+  w.style.display=shown?'none':'block';
+  btn.innerText=shown?'Show photos':'Hide photos';
+}
 """
 
 
@@ -374,7 +381,10 @@ def _progress_tab(b: dict) -> str:
   <div class="card"><h2>Measurements</h2>{meas_html}</div>
   <div class="card">
     <h2>Progress photos</h2>
-    {photo_html or '<div class="note">Drop photos in %RAPHA_HOME%\\\\data\\\\photos\\\\&lt;date&gt;\\\\</div>'}
+    {f'<button class="copy" id="photobtn" onclick="togglePhotos(this)">Show photos</button>'
+     f'<div id="photowrap" style="display:none;margin-top:12px">{photo_html}</div>'
+     if photo_html else
+     '<div class="note">Drop photos in %RAPHA_HOME%\\\\data\\\\photos\\\\&lt;date&gt;\\\\</div>'}
     <div class="note">{_e(pr.get("note",""))}</div>
   </div>
 </div>"""
