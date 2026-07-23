@@ -54,13 +54,13 @@ class TestTheMealsAreReal:
         assert any("Whey" in n for n in names)
 
     def test_the_shake_whey_matches_the_gold_standard_label(self):
-        # 30 g scoop → 24 g protein / 120 kcal (ON label). The curated per-100g
-        # values must reproduce that.
+        # 30 g scoop → 24 g protein / 110 kcal (ON Isolate label). The curated
+        # per-100g values must reproduce that.
         day = build_targeted_day(Kcal(2050), Grams(161))
         whey = next(it for it in day.meals[0].items if it.food == "whey")
         assert whey.grams == 30
         assert whey.protein_dg == 240   # 24.0 g
-        assert whey.kcal == 120
+        assert whey.kcal == 110
 
     def test_portions_are_rounded_to_something_weighable(self):
         day = build_targeted_day(Kcal(2050), Grams(161))
