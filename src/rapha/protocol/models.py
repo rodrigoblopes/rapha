@@ -42,6 +42,8 @@ class Exercise:
     declared_sets: int | None = None
     rest: Seconds | None = None
     issues: list[str] = field(default_factory=list)
+    #: The Cariani demo video for this movement, from the ficha's embedded link.
+    video_url: str | None = None
 
     @property
     def is_timed(self) -> bool:

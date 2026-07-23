@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import contextlib
 import re
+import unicodedata
+from dataclasses import replace
 from pathlib import Path
 
 import pdfplumber
@@ -328,6 +330,57 @@ def _clean(text: str | None) -> str:
     return re.sub(r"\s+", " ", (text or "").replace("\n", " ")).strip()
 
 
+def _norm(text: str) -> str:
+    """Accent-stripped, punctuation-flattened key for matching a name to a link."""
+    stripped = "".join(
+        c for c in unicodedata.normalize("NFD", (text or "").lower())
+        if unicodedata.category(c) != "Mn"
+    )
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", stripped)).strip()
+
+
+def _row_name(cells: list[str | None]) -> str:
+    """The exercise name in a table row, or '' — the first real, non-prescription line."""
+    for cell in cells or []:
+        if not cell:
+            continue
+        for line in cell.split("\n"):
+            if (sum(c.isalpha() for c in line) >= 4
+                    and not re.search(r"s[ée]rie|\brep\b|FICHA|ASSISTIR|INTERVALO|"
+                                      r"entre as s", line, re.IGNORECASE)):
+                return line
+    return ""
+
+
+def _page_exercise_links(page) -> dict[str, str]:
+    """Match each embedded video link on a page to the exercise at its height.
+
+    The fichas carry a YouTube link per exercise (the "clique no play"). Each link
+    has a vertical position; the exercise it belongs to is the table row at the
+    same height. Keyed by the normalised exercise name.
+    """
+    links = [
+        ((h["top"] + h["bottom"]) / 2, h["uri"])
+        for h in (page.hyperlinks or []) if h.get("uri")
+    ]
+    if not links:
+        return {}
+    rows: list[tuple[float, str]] = []
+    for table in page.find_tables():
+        for row_obj, row_txt in zip(table.rows, table.extract(), strict=False):
+            if not row_obj.bbox:
+                continue
+            name = _row_name(row_txt)
+            if name:
+                rows.append(((row_obj.bbox[1] + row_obj.bbox[3]) / 2, _norm(name)))
+    out: dict[str, str] = {}
+    for ly, uri in links:
+        if rows:
+            best = min(rows, key=lambda r: abs(r[0] - ly))
+            out[best[1]] = uri
+    return out
+
+
 def parse_ficha(path: Path) -> Programme:
     """Parse one sheet PDF. Each page is one training day."""
     sessions: list[Session] = []
@@ -388,6 +441,14 @@ def parse_ficha(path: Path) -> Programme:
                     "exercises parsed — implausible for a training day, so this "
                     "sheet probably uses a layout the parser does not handle"
                 )
+
+            # Attach the demo-video link to each exercise, matched by height.
+            links = _page_exercise_links(page)
+            if links:
+                exercises = [
+                    replace(e, video_url=links.get(_norm(e.name), e.video_url))
+                    for e in exercises
+                ]
 
             level = header.level if header.level != "DESCONHECIDO" else level
             sheet_number = sheet_number or header.sheet_number

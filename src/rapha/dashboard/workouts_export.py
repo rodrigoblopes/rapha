@@ -59,6 +59,7 @@ def build_sheet_workouts(sheet: dict) -> list[dict]:
                 "garmin_name": (gm.name or gm.category) if gm else None,
                 "scheme": _scheme(ex),
                 "rest_s": rest_s,
+                "video_url": ex.get("video_url"),
             })
         payload = build_workout(
             {"exercises": exercises}, name=name, strategy=RepStrategy.REPS
@@ -96,19 +97,22 @@ def to_markdown(sheet: dict, workouts: list[dict]) -> str:
         "For each exercise: add a step, set the exercise (the Garmin name below), "
         "set the target to the reps shown, and the rest to the seconds shown. "
         "Reps that change per set (e.g. `15 / 15 / 12 / 12`) mean one set at each "
-        "number, descending as the load rises (Cariani's pyramid).",
+        "number, descending as the load rises (Cariani's pyramid). **Paste the "
+        "video link into the step's Notes / Description field** so the demo is on "
+        "your watch and in Connect.",
         "",
     ]
     for w in workouts:
         lines.append(f"## {w['name']}")
         lines.append("")
-        lines.append("| # | Exercise (PT) | Garmin exercise | Sets × reps | Rest |")
-        lines.append("|---|---------------|-----------------|-------------|------|")
+        lines.append("| # | Exercise (PT) | Garmin exercise | Sets × reps | Rest | Video (put in Notes) |")
+        lines.append("|---|---------------|-----------------|-------------|------|----------------------|")
         for i, s in enumerate(w["steps"], 1):
             gm = s["garmin_name"] or "— (add manually)"
             rest = f"{s['rest_s']}s" if s["rest_s"] else "—"
+            vid = s.get("video_url") or "—"
             lines.append(
-                f"| {i} | {s['exercise'].title()} | {gm} | {s['scheme']} | {rest} |"
+                f"| {i} | {s['exercise'].title()} | {gm} | {s['scheme']} | {rest} | {vid} |"
             )
         if w["unmapped"]:
             lines.append("")
@@ -124,6 +128,8 @@ def to_json(sheet: dict, workouts: list[dict]) -> str:
             "sheet_number": sheet.get("sheet_number"),
             "weeks": sheet.get("weeks"),
             "rotation": _rotation_line(sheet),
+            "note": "Each step carries a video_url — paste it into the Garmin step's "
+                    "Notes/Description field.",
             "workouts": [
                 {k: w[k] for k in ("day", "focus", "name", "steps", "unmapped", "payload")}
                 for w in workouts
