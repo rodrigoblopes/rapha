@@ -1,7 +1,8 @@
 """`rapha` — the command line.
 
     rapha login     interactive Garmin login; stores OAuth tokens, never a password
-    rapha sync      pull Garmin data into SQLite
+    rapha sync      pull Garmin data into SQLite (unofficial API)
+    rapha pull      pull Garmin data via a logged-in Chrome over CDP (API fallback)
     rapha extract   parse the course into %RAPHA_HOME%\\protocol
     rapha assess    decide the Projeto 60 Dias level from real training history
     rapha plan      next week's fichas and menu
@@ -81,6 +82,42 @@ def cmd_sync(args: argparse.Namespace) -> int:
     end = date.today()
     start = end - timedelta(days=args.days)
     return garmin_read.sync(cfg, start, end, verbose=True)
+
+
+def cmd_pull(args: argparse.Namespace) -> int:
+    """Pull Garmin data by attaching to a logged-in Chrome (ADR-006 fallback).
+
+    The primary `sync` path uses the unofficial API. When that is IP-blocked and
+    Chrome's cookies are App-Bound-encrypted, this attaches over CDP to a Chrome
+    the user started with --remote-debugging-port=9222 and logged into by hand —
+    Cloudflare trusts the human session; Playwright only reads from it.
+    """
+    from .garmin import browser_pull
+
+    cfg = config.load()
+    print(
+        f"Attaching to Chrome on {browser_pull.CDP_URL}.\n"
+        "  (Start it once with:  chrome --remote-debugging-port=9222 "
+        "--user-data-dir=<a non-default dir>  and log into Garmin.)\n"
+    )
+    try:
+        summary = browser_pull.pull(
+            cfg,
+            activity_days=args.days,
+            metric_days=args.metric_days,
+            verbose=True,
+        )
+    except RuntimeError as e:
+        print(f"\n{e}", file=sys.stderr)
+        return 2
+
+    print(
+        f"\ndone: {summary['activities']} activities, {summary['days']} days "
+        f"({summary['measured_tdee_days']} with TDEE), "
+        f"{summary['exercise_set_rows']} exercise-set rows."
+    )
+    print("\nnow: rapha assess   rapha plan   rapha report")
+    return 0
 
 
 def cmd_extract(args: argparse.Namespace) -> int:
@@ -458,6 +495,18 @@ def build_parser() -> argparse.ArgumentParser:
         "year of those would be ~1400 requests against an unpublished rate limit.",
     )
 
+    p_pull = sub.add_parser(
+        "pull", help="pull Garmin data via a logged-in Chrome over CDP (API fallback)"
+    )
+    p_pull.add_argument(
+        "--days", type=int, default=365,
+        help="how far back to pull activities (default: 365)",
+    )
+    p_pull.add_argument(
+        "--metric-days", type=int, default=45,
+        help="how far back to pull per-day metrics (default: 45)",
+    )
+
     p_extract = sub.add_parser(
         "extract", help="parse the course into %%RAPHA_HOME%%/protocol"
     )
@@ -512,6 +561,7 @@ def build_parser() -> argparse.ArgumentParser:
 HANDLERS = {
     "login": cmd_login,
     "sync": cmd_sync,
+    "pull": cmd_pull,
     "extract": cmd_extract,
     "import": cmd_import,
     "assess": cmd_assess,
