@@ -134,6 +134,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     briefing["training"] = _training(programmes, st, today)
     briefing["meals"] = _meals(days, diets, foods, cfg, st, today)
     briefing["performance"] = _performance(days, acts, today)
+    briefing["progression"] = _progression(cfg)
     briefing["progress"] = _progress(days, st, cfg, today)
     return briefing
 
@@ -342,6 +343,67 @@ def _performance(days, acts, today) -> dict:
              "avg_hr": a.avg_hr, "kcal": a.calories.value if a.calories else None}
             for a in sorted(acts, key=lambda a: a.start, reverse=True)[:12]
         ],
+    }
+
+
+def _pretty_exercise(raw: str) -> str:
+    """`BARBELL_BENCH_PRESS` -> `Barbell Bench Press`; `_90_DEGREE_X` -> `90 Degree X`."""
+    return " ".join(w.capitalize() for w in raw.strip("_").split("_") if w)
+
+
+def _progression(cfg, *, top_n: int = 16, window: int = 6) -> dict:
+    """Per-exercise load history from the ExerciseStore, most-trained movements first.
+
+    ⚠️ Weight and the exercise name are Garmin's *auto-detection* from the watch,
+    not a logged prescription — a machine set can be mislabelled and its plate-stack
+    weight guessed. So the honest signal is the trend across sessions where the
+    movement is consistent, not any single number. The card says as much.
+    """
+    from ..garmin.exercise_store import ExerciseStore
+
+    if not cfg.db_path.is_file():
+        return {"available": False, "exercises": [], "total": 0}
+
+    exercises = []
+    with ExerciseStore(cfg.db_path) as es:
+        summaries = es.exercises()
+        for e in summaries:
+            prog = es.progression(e.name)  # newest first
+            if not prog:
+                continue
+            recent = list(reversed(prog[:window]))  # oldest -> newest for the spark
+            series = [(s.on.isoformat(), round((s.top_weight_g or 0) / 1000, 1))
+                      for s in recent]
+            weighted = [p for p in prog if p.top_weight_g]
+            trend_g = (weighted[0].top_weight_g - weighted[-1].top_weight_g
+                       if len(weighted) >= 2 else None)
+            latest = prog[0]
+            exercises.append({
+                "name": _pretty_exercise(e.name),
+                "raw": e.name,
+                "category": e.category,
+                "sessions": e.sessions,
+                "last_seen": e.last_seen.isoformat(),
+                "top_kg": (round(latest.top_weight_g / 1000, 1)
+                           if latest.top_weight_g else None),
+                "reps": latest.reps_at_top,
+                "bodyweight": latest.top_weight_g is None,
+                "trend_kg": (round(trend_g / 1000, 1) if trend_g is not None else None),
+                "series": series,
+            })
+
+    exercises.sort(key=lambda x: (x["sessions"], x["last_seen"]), reverse=True)
+    return {
+        "available": True,
+        "total": len(exercises),
+        "exercises": exercises[:top_n],
+        "note": (
+            "Loads are read from Garmin's on-watch exercise detection, not a logged "
+            "sheet — a machine set can be mislabelled or its weight guessed, so read "
+            "the trend across sessions, not any single figure. This is the raw "
+            "material for Módulo 17's double-progression: when reps hit the top of "
+            "the range at a weight, the next step is to add load."
+        ),
     }
 
 

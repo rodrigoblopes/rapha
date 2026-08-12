@@ -108,6 +108,27 @@ function togglePhotos(btn){
   w.style.display=shown?'none':'block';
   btn.innerText=shown?'Show photos':'Hide photos';
 }
+async function uploadPhotos(input){
+  // POST each file raw with its name in X-Filename. The server converts HEIC->JPG,
+  // stores under today's date, and re-renders; we reload to show the new set.
+  const status=document.getElementById('upstatus');
+  const files=[...input.files];
+  if(!files.length) return;
+  status.textContent='Uploading '+files.length+' photo'+(files.length>1?'s':'')+'\\u2026';
+  let ok=0, err='';
+  for(const f of files){
+    try{
+      const r=await fetch('/upload/photo',{method:'POST',
+        headers:{'X-Filename':f.name},body:f});
+      const j=await r.json().catch(()=>({}));
+      if(r.ok&&j.ok){ok++;} else {err=(j&&j.error)||('HTTP '+r.status);}
+    }catch(e){err=''+e;}
+  }
+  input.value='';
+  if(ok){status.textContent=ok+' uploaded \\u2713 reloading\\u2026';
+    setTimeout(()=>location.reload(),700);}
+  else{status.textContent='Upload failed: '+err+' (is the portal served by rapha serve?)';}
+}
 """
 
 
@@ -341,7 +362,54 @@ def _performance_tab(b: dict) -> str:
     <table><tr><th>Date</th><th>Type</th><th class="num">Time</th><th class="num">Avg HR</th><th class="num">kcal</th></tr>
     {act_rows}</table>
   </div>
+  {_progression_card(b.get("progression", {}))}
 </div>"""
+
+
+def _progression_card(pg: dict) -> str:
+    if not pg.get("available") or not pg.get("exercises"):
+        return ('<div class="card"><h2>Load progression</h2>'
+                '<div class="note">No strength sets yet — run <code>rapha pull</code> '
+                'to read your on-watch exercise loads.</div></div>')
+
+    rows = ""
+    for e in pg["exercises"]:
+        if e["bodyweight"]:
+            load = f'BW × {_e(e["reps"] or "—")}'
+        else:
+            load = f'{_e(e["top_kg"])} kg × {_e(e["reps"] or "—")}'
+        t = e.get("trend_kg")
+        if t is None:
+            trend = '<span style="color:var(--dim)">—</span>'
+        elif t > 0:
+            trend = f'<span style="color:var(--accent)">▲ +{_e(t)} kg</span>'
+        elif t < 0:
+            trend = f'<span style="color:var(--amber)">▼ {_e(t)} kg</span>'
+        else:
+            trend = '<span style="color:var(--dim)">→ held</span>'
+        spark = _spark(e.get("series", []), w=120, h=28) if len(e.get("series", [])) > 1 else ""
+        rows += (
+            f'<tr><td>{_e(e["name"])}</td>'
+            f'<td class="num">{e["sessions"]}</td>'
+            f'<td class="num">{load}</td>'
+            f'<td class="num">{trend}</td>'
+            f'<td style="text-align:right">{spark}</td></tr>'
+        )
+
+    total = pg.get("total", 0)
+    more = (f'<div class="note">Showing the {len(pg["exercises"])} most-trained of '
+            f'{total} movements.</div>') if total > len(pg["exercises"]) else ""
+    return f"""
+  <div class="card">
+    <h2>Load progression</h2>
+    <table>
+      <tr><th>Exercise</th><th class="num">Sess.</th><th class="num">Top set</th>
+          <th class="num">Trend</th><th style="text-align:right">Top-weight</th></tr>
+      {rows}
+    </table>
+    {more}
+    <div class="note">{_e(pg.get("note",""))}</div>
+  </div>"""
 
 
 def _progress_tab(b: dict) -> str:
@@ -391,10 +459,18 @@ def _progress_tab(b: dict) -> str:
   <div class="card"><h2>Measurements</h2>{meas_html}</div>
   <div class="card">
     <h2>Progress photos</h2>
-    {f'<button class="copy" id="photobtn" onclick="togglePhotos(this)">Show photos</button>'
-     f'<div id="photowrap" style="display:none;margin-top:12px">{photo_html}</div>'
+    <label class="copy" style="cursor:pointer;display:inline-block">Upload photos
+      <input type="file" accept=".heic,.heif,.jpg,.jpeg,.png,image/*" multiple
+             style="display:none" onchange="uploadPhotos(this)">
+    </label>
+    {'<button class="copy" id="photobtn" style="margin-left:8px" '
+     'onclick="togglePhotos(this)">Show photos</button>' if photo_html else ''}
+    <span class="note" id="upstatus" style="margin-left:10px"></span>
+    {f'<div id="photowrap" style="display:none;margin-top:12px">{photo_html}</div>'
      if photo_html else
-     '<div class="note">Drop photos in %RAPHA_HOME%\\\\data\\\\photos\\\\&lt;date&gt;\\\\</div>'}
+     '<div class="note" style="margin-top:8px">No photos yet — upload straight from '
+     'your phone (HEIC is converted automatically), or drop them in '
+     '%RAPHA_HOME%\\\\data\\\\photos\\\\&lt;date&gt;\\\\</div>'}
     <div class="note">{_e(pr.get("note",""))}</div>
   </div>
 </div>"""
