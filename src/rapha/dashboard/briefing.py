@@ -38,6 +38,28 @@ def _state(cfg) -> dict:
     return {}
 
 
+def _bodyfat(cfg, st) -> tuple[int | None, str]:
+    """Best body-fat estimate (×10) and its source.
+
+    Prefer the Navy formula from tape measurements — objective and repeatable —
+    over the one-off photo estimate, but keep the photo number in the note when the
+    two disagree, because they carry different errors.
+    """
+    from ..rules.measurements import navy_bodyfat_pct_x10
+
+    m = st.get("measurements") or {}
+    height_mm = cfg.athlete_height_mm or 1770
+    if m.get("waist_mm") and m.get("neck_mm"):
+        navy = navy_bodyfat_pct_x10(m["waist_mm"], m["neck_mm"], height_mm,
+                                    sex=cfg.athlete_sex)
+        if navy is not None:
+            photo = st.get("bodyfat_pct_x10")
+            extra = (f" (photo estimate read ~{photo / 10:.0f}%; the tape is the "
+                     "repeatable measure)") if photo else ""
+            return navy, f"Navy formula from tape, {m.get('measured_on', '')}{extra}"
+    return st.get("bodyfat_pct_x10"), st.get("bodyfat_source", "")
+
+
 def _fmt(t: datetime) -> str:
     hour12 = t.hour % 12 or 12          # cross-platform 12-hour, no %-I
     return f"{hour12}:{t.minute:02d} {'AM' if t.hour < 12 else 'PM'}"
@@ -233,7 +255,8 @@ def _meals(days, diets, foods, cfg, st, today) -> dict:
     target = Kcal(tdee.value - apply_bps(tdee, cfg.deficit_bps, Rounding.DOWN).value)
     protein_g = weight.value * cfg.protein_g_per_kg_x10 // 10000
 
-    direction, why = recompose_direction(st.get("bodyfat_pct_x10"))
+    bf10, _ = _bodyfat(cfg, st)
+    direction, why = recompose_direction(bf10)
 
     # Solve real portions to hit the target exactly, rather than costing a fixed
     # model with fuzzy matches.
@@ -323,8 +346,23 @@ def _performance(days, acts, today) -> dict:
 
 
 def _progress(days, st, cfg, today) -> dict:
+    from ..rules.measurements import biotype
+
     weights = [(d.on.isoformat(), round(d.weight.value / 1000, 1))
                for d in days if d.weight]
+
+    bf10, bf_src = _bodyfat(cfg, st)
+    m = st.get("measurements") or {}
+    height_mm = cfg.athlete_height_mm or 1770
+    tape = {}
+    if m.get("neck_mm"):
+        tape = {
+            "measured_on": m.get("measured_on", ""),
+            "neck_cm": m["neck_mm"] / 10,
+            "waist_cm": m["waist_mm"] / 10 if m.get("waist_mm") else None,
+            "wingspan_cm": m["wingspan_mm"] / 10 if m.get("wingspan_mm") else None,
+            "biotype": biotype(m["wingspan_mm"], height_mm) if m.get("wingspan_mm") else None,
+        }
 
     photos = []
     pdir = cfg.home / "data" / "photos"
@@ -338,14 +376,16 @@ def _progress(days, st, cfg, today) -> dict:
                                "subdir": "jpg" if jpg.is_dir() else ""})
 
     return {
-        "bodyfat_pct": (st.get("bodyfat_pct_x10", 0) / 10) or None,
-        "bodyfat_source": st.get("bodyfat_source"),
+        "bodyfat_pct": (bf10 / 10) if bf10 is not None else None,
+        "bodyfat_source": bf_src,
         "somatotype": st.get("somatotype"),
+        "biotype": tape.get("biotype"),
         "weight_series": weights,
-        "measurements": st.get("measurements", {}),
+        "tape": tape,
         "photo_sets": photos,
         "note": (
-            "Recomposition shows up in the mirror and the tape before the scale. "
-            "Re-shoot the same set every 15 days — same room, light and distance."
+            "Recomposition shows up in the tape and the mirror before the scale. "
+            "Re-measure and re-shoot the same set every 15 days — same room, light "
+            "and distance."
         ),
     }

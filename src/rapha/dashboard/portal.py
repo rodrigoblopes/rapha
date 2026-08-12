@@ -357,10 +357,19 @@ def _progress_tab(b: dict) -> str:
         photo_html += f'<h2>{_e(pset["date"])}</h2><div class="photos">{imgs}</div>'
 
     weights = pr.get("weight_series", [])
-    meas = pr.get("measurements", {})
-    meas_html = ("".join(f'<span class="tag">{_e(k)}: {_e(v)}</span>' for k, v in meas.items())
-                 or '<div class="note">No tape measurements yet — waist + neck lets me track '
-                    'body fat by the Navy formula every 15 days.</div>')
+    tape = pr.get("tape") or {}
+    if tape.get("neck_cm"):
+        parts = []
+        if tape.get("waist_cm"):
+            parts.append(f'<span class="tag">waist: {_e(tape["waist_cm"])} cm</span>')
+        parts.append(f'<span class="tag">neck: {_e(tape["neck_cm"])} cm</span>')
+        if tape.get("wingspan_cm"):
+            parts.append(f'<span class="tag">wingspan: {_e(tape["wingspan_cm"])} cm</span>')
+        meas_html = ("".join(parts)
+                     + f'<div class="note">Measured {_e(tape.get("measured_on",""))}</div>')
+    else:
+        meas_html = ('<div class="note">No tape measurements yet — waist + neck lets me '
+                     'track body fat by the Navy formula every 15 days.</div>')
 
     return f"""
 <div class="tab" id="progress">
@@ -368,7 +377,8 @@ def _progress_tab(b: dict) -> str:
     <h2>Body composition</h2>
     <div class="row">
       {_stat(f'{ath.get("weight_kg","—")} kg', "Weight")}
-      {_stat(f'~{pr.get("bodyfat_pct","—")}%', "Body fat (est.)")}
+      {_stat(f'{pr.get("bodyfat_pct","—")}%', "Body fat")}
+      {_stat(pr.get("biotype","—") or "—", "Biotype")}
       {_stat(pr.get("somatotype","—") or "—", "Somatotype")}
     </div>
     <div class="note">{_e(pr.get("bodyfat_source",""))}</div>
