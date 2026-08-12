@@ -116,7 +116,9 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     weight_hist: list = []
     if cfg.db_path.is_file():
         with Store(cfg.db_path) as store:
-            days = store.daily_between(today - timedelta(days=120), today)
+            # Wide enough for the 1Y/All performance windows; the recovery and meal
+            # rules filter down to their own short windows internally.
+            days = store.daily_between(today - timedelta(days=400), today)
             acts = store.activities_between(today - timedelta(days=120), today)
             weight_hist = store.weight_history()
 
@@ -135,7 +137,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     briefing["overview"] = _overview(days, acts, programmes, st, today)
     briefing["training"] = _training(programmes, st, today)
     briefing["meals"] = _meals(days, diets, foods, cfg, st, today)
-    briefing["performance"] = _performance(days, acts, today)
+    briefing["performance"] = _performance(days, acts, today, cfg.home)
     briefing["progression"] = _progression(cfg)
     briefing["progress"] = _progress(days, st, cfg, today, weight_hist)
     briefing["coach"] = _coach(briefing, today)
@@ -404,7 +406,18 @@ def _meals(days, diets, foods, cfg, st, today) -> dict:
     }
 
 
-def _performance(days, acts, today) -> dict:
+def _intraday(cfg_home) -> dict:
+    """The latest-day heart-rate samples the pull cached, if any."""
+    path = cfg_home / "data" / "cache" / "intraday.json"
+    if path.is_file():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            return {}
+    return {}
+
+
+def _performance(days, acts, today, cfg_home) -> dict:
     strength = [a for a in acts if "strength" in a.kind or "fitness" in a.kind]
     runs = [a for a in acts if "run" in a.kind or "cycl" in a.kind or "swim" in a.kind]
     times = sorted(f"{a.start.hour:02d}:{a.start.minute:02d}" for a in strength)
@@ -420,6 +433,7 @@ def _performance(days, acts, today) -> dict:
         "stress_series": _series(days, "stress_avg"),
         "sleep_series": _series(days, "sleep", lambda s: round(s.value / 3600, 1)),
         "steps_series": _series(days, "steps"),
+        "intraday": _intraday(cfg_home),
         "vo2max": (latest("vo2max_x10", lambda v: v) or 0) / 10 or None,
         "strength_sessions": len(strength),
         "cardio_sessions": len(runs),

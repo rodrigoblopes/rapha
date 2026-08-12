@@ -41,6 +41,11 @@ nav{position:sticky;top:0;z-index:10;background:var(--bg);
 nav button{flex:0 0 auto;background:transparent;border:1px solid var(--line);color:var(--dim);
   padding:8px 15px;border-radius:999px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
 nav button.on{background:var(--accent);border-color:var(--accent);color:#0d1017}
+.tfbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.tfbar button{background:transparent;border:1px solid var(--line);color:var(--dim);
+  padding:5px 13px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer}
+.tfbar button.on{background:var(--accent);border-color:var(--accent);color:#0d1017}
+.dirtag{color:var(--dim);font-size:11px;font-weight:400}
 main{max-width:900px;margin:0 auto;padding:4px 20px 80px}
 .tab{display:none}.tab.on{display:block;animation:f .2s ease}
 @keyframes f{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
@@ -129,6 +134,41 @@ async function uploadPhotos(input){
     setTimeout(()=>location.reload(),700);}
   else{status.textContent='Upload failed: '+err+' (is the portal served by rapha serve?)';}
 }
+function _drawLine(el, series, color){
+  const vals=series.map(p=>p[1]).filter(v=>v!=null);
+  if(vals.length<2){ el.innerHTML='<span class="note">not enough data in this range</span>'; return null; }
+  const lo=Math.min(...vals), hi=Math.max(...vals), rng=(hi-lo)||1, w=320, h=48, n=vals.length;
+  const pts=vals.map((v,i)=>((i/(n-1)*w).toFixed(1)+','+(h-(v-lo)/rng*h).toFixed(1))).join(' ');
+  el.innerHTML='<svg width="100%" height="'+(h+8)+'" viewBox="0 0 '+w+' '+(h+8)+'" '
+    +'preserveAspectRatio="none" style="max-width:340px"><polyline fill="none" stroke="'
+    +color+'" stroke-width="2" stroke-linejoin="round" points="'+pts+'"/></svg>';
+  return {latest:vals[vals.length-1], avg:vals.reduce((a,b)=>a+b,0)/vals.length};
+}
+function perfRange(tf, btn){
+  document.querySelectorAll('#perfbar button').forEach(b=>b.classList.remove('on'));
+  if(btn) btn.classList.add('on');
+  const days={'7d':7,'30d':30,'90d':90,'1y':365,'all':100000}[tf]||30;
+  const cutoff=Date.now()-days*86400000;
+  document.querySelectorAll('[data-metric]').forEach(el=>{
+    const key=el.getAttribute('data-metric'), unit=el.getAttribute('data-unit')||'';
+    const all=(window.PERF&&window.PERF[key])||[];
+    const s=all.filter(p=>Date.parse(p[0])>=cutoff);
+    const pc=el.querySelector('.pc'), pv=el.querySelector('.pv'), pa=el.querySelector('.pa');
+    const r=_drawLine(pc, s, 'var(--accent)');
+    if(r){ pv.textContent=(Math.round(r.latest*10)/10)+unit;
+      pa.textContent='avg '+(Math.round(r.avg*10)/10)+unit+' \\u00b7 '+s.length+' readings'; }
+    else { pv.textContent='\\u2014'; pa.textContent=''; }
+  });
+}
+function _drawIntraday(){
+  const el=document.getElementById('intraday-hr'); if(!el) return;
+  const hr=((window.PERF_INTRADAY||{}).hr)||[];
+  _drawLine(el, hr, 'var(--red)');
+}
+window.addEventListener('DOMContentLoaded',function(){
+  _drawIntraday();
+  const b=document.querySelector('#perfbar button.def'); if(b) b.click();
+});
 """
 
 
@@ -389,20 +429,50 @@ def _meals_tab(b: dict) -> str:
 </div>"""
 
 
-def _performance_tab(b: dict) -> str:
-    p = b.get("performance", {})
+# The daily metrics the timeframe selector windows. Each: (key, label, unit,
+# lower_is_better). The JS reads window.PERF[key] and redraws for the active range.
+_PERF_METRICS = [
+    ("tdee", "Energy burned (TDEE)", " kcal", False),
+    ("hrv", "HRV — overnight", " ms", False),
+    ("rhr", "Resting heart rate", " bpm", True),
+    ("sleep", "Sleep", " h", False),
+    ("stress", "Stress", "", True),
+    ("steps", "Steps", "", False),
+    ("weight", "Weight", " kg", False),
+]
 
-    def block(label, series, unit="", color="var(--accent)", lower=False):
-        vals = [v for _, v in series if v is not None]
-        latest = vals[-1] if vals else "—"
-        avg = round(sum(vals) / len(vals), 1) if vals else "—"
-        return (
-            f'<div class="card"><h2>{_e(label)}</h2>'
-            f'<div class="row" style="align-items:center">'
-            f'<div><div class="big">{_e(latest)}{_e(unit)}</div>'
-            f'<div class="l" style="color:var(--dim);font-size:12px">avg {_e(avg)}{_e(unit)}</div></div>'
-            f'<div style="flex:1;text-align:right">{_spark(series, color=color)}</div>'
-            f'</div></div>'
+
+def _performance_tab(b: dict) -> str:
+    import json as _json
+
+    p = b.get("performance", {})
+    pr = b.get("progress", {})
+
+    perf_series = {
+        "tdee": p.get("tdee_series", []),
+        "hrv": p.get("hrv_series", []),
+        "rhr": p.get("rhr_series", []),
+        "sleep": p.get("sleep_series", []),
+        "stress": p.get("stress_series", []),
+        "steps": p.get("steps_series", []),
+        "weight": pr.get("weight_view", {}).get("actual", []),
+    }
+    perf_json = _json.dumps(perf_series)
+    intraday_json = _json.dumps(p.get("intraday") or {})
+
+    metric_cards = ""
+    for key, label, unit, lower in _PERF_METRICS:
+        metric_cards += (
+            f'<div class="card" data-metric="{key}" data-unit="{_e(unit)}" '
+            f'data-lower="{1 if lower else 0}">'
+            f'<h2>{_e(label)} <span class="dirtag">'
+            f'{"↓ lower is better" if lower else "↑ higher is better" if key in ("hrv","steps") else ""}'
+            f'</span></h2>'
+            '<div class="row" style="align-items:center">'
+            '<div><div class="big pv">—</div>'
+            '<div class="l pa" style="color:var(--dim);font-size:12px"></div></div>'
+            '<div class="pc" style="flex:1;text-align:right;min-width:0"></div>'
+            '</div></div>'
         )
 
     act_rows = ""
@@ -416,6 +486,7 @@ def _performance_tab(b: dict) -> str:
 
     return f"""
 <div class="tab" id="performance">
+  <script>window.PERF={perf_json};window.PERF_INTRADAY={intraday_json};</script>
   <div class="card">
     <h2>Snapshot</h2>
     <div class="row">
@@ -425,17 +496,50 @@ def _performance_tab(b: dict) -> str:
       {_stat(p.get("typical_train_time","—"), "Usual start")}
     </div>
   </div>
-  {block("Energy burned (TDEE)", p.get("tdee_series",[]), " kcal")}
-  {block("HRV — overnight", p.get("hrv_series",[]), " ms", "var(--blue)")}
-  {block("Resting heart rate", p.get("rhr_series",[]), "", "var(--amber)", True)}
-  {block("Sleep", p.get("sleep_series",[]), " h", "var(--blue)")}
-  {block("Stress", p.get("stress_series",[]), "", "var(--amber)", True)}
+  {_intraday_card(p.get("intraday"))}
+  <div class="card" style="position:sticky;top:0;z-index:5">
+    <h2>Trends over time</h2>
+    <div id="perfbar" class="tfbar">
+      <button onclick="perfRange('7d',this)">7D</button>
+      <button class="on def" onclick="perfRange('30d',this)">30D</button>
+      <button onclick="perfRange('90d',this)">90D</button>
+      <button onclick="perfRange('1y',this)">1Y</button>
+      <button onclick="perfRange('all',this)">All</button>
+    </div>
+    <div class="note">A line that starts partway in just means that metric hasn't been
+      recorded that far back yet — history fills in as the watch keeps syncing.</div>
+  </div>
+  {metric_cards}
   <div class="card"><h2>Recent sessions</h2>
     <table><tr><th>Date</th><th>Type</th><th class="num">Time</th><th class="num">Avg HR</th><th class="num">kcal</th></tr>
     {act_rows}</table>
   </div>
   {_progression_card(b.get("progression", {}))}
 </div>"""
+
+
+def _intraday_card(intraday: dict | None) -> str:
+    """The Day view: a single day's heart-rate (and stress) at watch resolution."""
+    if not intraday or not intraday.get("hr"):
+        return (
+            '<div class="card"><h2>Day · heart rate</h2>'
+            '<div class="note">No intraday data pulled yet. Run <code>rapha pull</code> '
+            'to fetch the most recent day at watch resolution.</div></div>'
+        )
+    d = intraday.get("date", "")
+    hr = [v for _, v in intraday["hr"] if v is not None]
+    lo, hi = (min(hr), max(hr)) if hr else ("—", "—")
+    return f"""
+  <div class="card">
+    <h2>Day · heart rate <span class="dirtag">{_e(d)}</span></h2>
+    <div class="row" style="align-items:center">
+      <div><div class="big">{_e(lo)}–{_e(hi)}</div>
+        <div class="l" style="color:var(--dim);font-size:12px">bpm range</div></div>
+      <div class="pc" id="intraday-hr" style="flex:1;text-align:right;min-width:0"></div>
+    </div>
+    <div class="note">Resting dips and training spikes across the day — the shape a
+      single daily number hides.</div>
+  </div>"""
 
 
 def _progression_card(pg: dict) -> str:

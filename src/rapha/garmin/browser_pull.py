@@ -18,11 +18,12 @@ so the core package still installs with just garminconnect + pdfplumber.
 from __future__ import annotations
 
 import contextlib
+import json
 from datetime import date, timedelta
 
 from ..db import Store
 from ..models import Activity, DailyMetrics, Measurement, Source
-from ..units import Grams
+from ..units import Grams, Seconds
 from .read import activity_from_payload, daily_from_payloads
 
 CDP_URL = "http://127.0.0.1:9222"
@@ -54,11 +55,17 @@ async ({dn, csrf, dates, days_meta, wstart, wend}) => {
   // Weigh-ins are sparse, so pull them over the whole activity window in one call —
   // oldest to newest (the range API is directional; reversing it returns nothing).
   const weight = await j(`/weight-service/weight/range/${wstart}/${wend}?includeAll=true`);
+  // A year of sleep in ONE call — the only daily metric with a cheap range endpoint,
+  // so the long-horizon (1Y/All) view has real data without a per-day request storm.
+  const sleepQ = `startDate=${wstart}&endDate=${wend}&${buf}`;
+  const sleepRange = await j(`/wellness-service/wellness/dailySleeps?${sleepQ}`);
+  // The latest day at watch resolution, for the intraday "Day" view.
+  const intradayHr = await j(`/wellness-service/wellness/dailyHeartRate/${dn}?date=${wend}`);
   const exerciseSets = {};
   for (const m of days_meta) {
     exerciseSets[m.id] = await j(`/activity-service/activity/${m.id}/exerciseSets`);
   }
-  return {days, weight, exerciseSets};
+  return {days, weight, sleepRange, intradayHr, exerciseSets};
 };
 """
 
@@ -164,6 +171,8 @@ def pull(cfg, *, activity_days: int = 365, metric_days: int = 45, verbose: bool 
 
 
 def _ingest(cfg, activities_raw, bundle, activity_days, say) -> dict:
+    today = date.today()
+
     # Activities. `activity_from_payload` tags them GARMIN_API; rebuild each with
     # the browser source. Activity is a frozen slots dataclass, so `replace`, not
     # `__dict__`. Dedupe by activity_id first: the page's own fetch and the
@@ -178,9 +187,9 @@ def _ingest(cfg, activities_raw, bundle, activity_days, say) -> dict:
             by_id[a.activity_id] = replace(a, source=Source.GARMIN_BROWSER)
     acts: list[Activity] = list(by_id.values())
 
-    # Daily metrics
+    # Daily metrics — the recent window carries every field (per-day endpoints)…
     weights = _weights_by_date(bundle.get("weight") or {})
-    days: list[DailyMetrics] = []
+    recent: dict[date, DailyMetrics] = {}
     for d in bundle.get("days", []):
         try:
             on = date.fromisoformat(d["date"])
@@ -189,13 +198,31 @@ def _ingest(cfg, activities_raw, bundle, activity_days, say) -> dict:
         mm = d.get("maxmet")
         if isinstance(mm, list):
             mm = mm[0] if mm else None
-        days.append(daily_from_payloads(on, d.get("summary"), d.get("sleep"),
-                                        d.get("hrv"), mm, weights.get(on)))
-        days[-1] = replace(days[-1], source=Source.GARMIN_BROWSER)
+        row = daily_from_payloads(on, d.get("summary"), d.get("sleep"),
+                                  d.get("hrv"), mm, weights.get(on))
+        recent[on] = replace(row, source=Source.GARMIN_BROWSER)
 
-    # Weigh-ins are sparse and span far beyond the 45-day daily window, so they go
-    # in the measurements table (keyed on their own date), not onto a daily row that
-    # may not exist. `latest_weight` and the weight chart already union both sources.
+    # …and older days carry sleep only, backfilled from the one-call year of sleep,
+    # so the 1Y/All view has real data without a per-day request for every day.
+    sleep_by_date = _sleep_seconds_by_date(bundle.get("sleepRange"))
+    window_start = today - timedelta(days=activity_days)
+    days: list[DailyMetrics] = []
+    for on in sorted(set(recent) | set(sleep_by_date)):
+        if not (window_start <= on <= today):
+            continue
+        if on in recent:
+            row = recent[on]
+            if row.sleep is None and sleep_by_date.get(on):
+                row = replace(row, sleep=Seconds(sleep_by_date[on]))
+            days.append(row)
+        else:
+            days.append(DailyMetrics(
+                on=on, source=Source.GARMIN_BROWSER,
+                sleep=Seconds(sleep_by_date[on]) if sleep_by_date.get(on) else None))
+
+    # Weigh-ins are sparse and span far beyond the daily window, so they go in the
+    # measurements table (keyed on their own date). `latest_weight` and the weight
+    # chart already union both sources.
     weighins = _weighins_from_payload(bundle.get("weight") or {})
 
     with Store(cfg.db_path) as store:
@@ -203,9 +230,11 @@ def _ingest(cfg, activities_raw, bundle, activity_days, say) -> dict:
             store.ingest_activities(min(a.start.date() for a in acts),
                                     max(a.start.date() for a in acts), acts)
         if days:
-            store.ingest_daily(min(d.on for d in days), max(d.on for d in days), days)
+            store.ingest_daily(window_start, today, days)
         for m in weighins:
             store.record_measurement(m)
+
+    _write_intraday_cache(cfg, bundle.get("intradayHr"))
 
     # Exercise sets -> stored for progression
     n_sets = _store_exercise_sets(cfg, activities_raw, bundle.get("exerciseSets") or {})
@@ -229,6 +258,32 @@ def _weighins_from_payload(weight_json: dict) -> list[Measurement]:
     for on, grams in sorted(_weights_by_date(weight_json).items()):
         out.append(Measurement(on=on, source=Source.GARMIN_BROWSER, weight=Grams(grams)))
     return out
+
+
+def _sleep_seconds_by_date(sleep_range) -> dict[date, int]:
+    """`dailySleeps` range → {date: sleepTimeSeconds}. A year in one payload."""
+    out: dict[date, int] = {}
+    for rec in (sleep_range or []):
+        stamp = rec.get("calendarDate")
+        secs = rec.get("sleepTimeSeconds")
+        if stamp and secs:
+            with contextlib.suppress(ValueError, TypeError):
+                out[date.fromisoformat(stamp)] = int(secs)
+    return out
+
+
+def _write_intraday_cache(cfg, intraday_hr) -> None:
+    """Persist the latest day's heart-rate samples for the portal's Day view.
+
+    A per-minute series is a latest-snapshot, not analytical history, so it lives as
+    a small JSON cache under %RAPHA_HOME% rather than as thousands of DB rows.
+    """
+    values = (intraday_hr or {}).get("heartRateValues") or []
+    hr = [[ts, bpm] for ts, bpm in values if bpm is not None]
+    payload = {"date": (intraday_hr or {}).get("calendarDate", ""), "hr": hr}
+    cache = cfg.home / "data" / "cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache / "intraday.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _weights_by_date(weight_json: dict) -> dict[date, int]:
