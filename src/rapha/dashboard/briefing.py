@@ -113,10 +113,12 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
 
     days: list = []
     acts: list = []
+    weight_hist: list = []
     if cfg.db_path.is_file():
         with Store(cfg.db_path) as store:
             days = store.daily_between(today - timedelta(days=120), today)
             acts = store.activities_between(today - timedelta(days=120), today)
+            weight_hist = store.weight_history()
 
     briefing: dict[str, Any] = {
         "generated": today.isoformat(),
@@ -135,7 +137,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     briefing["meals"] = _meals(days, diets, foods, cfg, st, today)
     briefing["performance"] = _performance(days, acts, today)
     briefing["progression"] = _progression(cfg)
-    briefing["progress"] = _progress(days, st, cfg, today)
+    briefing["progress"] = _progress(days, st, cfg, today, weight_hist)
     return briefing
 
 
@@ -407,11 +409,75 @@ def _progression(cfg, *, top_n: int = 16, window: int = 6) -> dict:
     }
 
 
-def _progress(days, st, cfg, today) -> dict:
+def _weight_view(weight_hist, today, *, protocol_start=None,
+                 trend_days: int = 70, project_days: int = 21) -> dict:
+    """Actual weigh-ins plus a dotted least-squares trend over the relevant window.
+
+    Weight day-to-day is mostly water; the honest signal is the slope through the
+    recent points, not the last reading. The window that matters is *since the
+    protocol started* — fitting across the pre-cut period would blend a rise and a
+    fall into a meaningless near-flat line. So we prefer weigh-ins from
+    ``protocol_start`` on, fall back to the last ``trend_days`` if too few, and extend
+    the fit ``project_days`` past today. Where the next real weigh-ins land against
+    that dotted line is the feedback on whether the deficit is doing what maths says.
+    """
+    actual = [(d.isoformat(), round(g / 1000, 1)) for d, g in weight_hist]
+    view = {"actual": actual, "estimate": [], "rate_kg_per_week": None,
+            "projected_kg": None, "trend_note": "", "basis": ""}
+    if len(weight_hist) < 2:
+        view["trend_note"] = "Two weigh-ins are enough to start a trend line."
+        return view
+
+    origin = weight_hist[0][0]
+    recent, basis = [], ""
+    if protocol_start:
+        recent = [(d, g) for d, g in weight_hist if d >= protocol_start]
+        basis = "since the protocol started"
+    if len(recent) < 2:
+        recent = [(d, g) for d, g in weight_hist if (today - d).days <= trend_days]
+        basis = f"over the last {trend_days} days"
+    if len(recent) < 2:
+        recent = weight_hist[-4:]  # last resort: the last few points
+        basis = "over the last few weigh-ins"
+    view["basis"] = basis
+
+    xs = [(d - origin).days for d, _ in recent]
+    ys = [g / 1000 for _, g in recent]
+    n = len(xs)
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    denom = sum((x - mean_x) ** 2 for x in xs)
+    if denom == 0:
+        return view
+    slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys, strict=True)) / denom
+    intercept = mean_y - slope * mean_x
+
+    def at(d: date) -> float:
+        return round(intercept + slope * (d - origin).days, 1)
+
+    start = recent[0][0]
+    end = today + timedelta(days=project_days)
+    view["estimate"] = [(start.isoformat(), at(start)), (end.isoformat(), at(end))]
+    view["rate_kg_per_week"] = round(slope * 7, 2)
+    view["projected_kg"] = at(end)
+    direction = "down" if slope < 0 else "up" if slope > 0 else "flat"
+    view["trend_note"] = (
+        f"Trend {basis}: {view['rate_kg_per_week']:+} kg/week ({direction}). Dotted line "
+        f"carries that trend {project_days} days past today (~{view['projected_kg']} kg) — "
+        "an estimate from the data, not a target. Where the next weigh-ins land against "
+        "it tells you if it holds."
+    )
+    return view
+
+
+def _progress(days, st, cfg, today, weight_hist=None) -> dict:
     from ..rules.measurements import biotype
 
-    weights = [(d.on.isoformat(), round(d.weight.value / 1000, 1))
-               for d in days if d.weight]
+    weight_hist = weight_hist or []
+    pstart = (date.fromisoformat(st["protocol_start"])
+              if st.get("protocol_start") else None)
+    weight_view = _weight_view(weight_hist, today, protocol_start=pstart)
+    weights = weight_view["actual"]
 
     bf10, bf_src = _bodyfat(cfg, st)
     m = st.get("measurements") or {}
@@ -443,6 +509,7 @@ def _progress(days, st, cfg, today) -> dict:
         "somatotype": st.get("somatotype"),
         "biotype": tape.get("biotype"),
         "weight_series": weights,
+        "weight_view": weight_view,
         "tape": tape,
         "photo_sets": photos,
         "note": (

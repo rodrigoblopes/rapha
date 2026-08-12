@@ -21,7 +21,8 @@ import contextlib
 from datetime import date, timedelta
 
 from ..db import Store
-from ..models import Activity, DailyMetrics, Source
+from ..models import Activity, DailyMetrics, Measurement, Source
+from ..units import Grams
 from .read import activity_from_payload, daily_from_payloads
 
 CDP_URL = "http://127.0.0.1:9222"
@@ -31,7 +32,7 @@ GC = "https://connect.garmin.com/gc-api"
 # sets for each strength activity. Fewer round-trips than driving each call from
 # Python. Returns a plain object Playwright hands back as a dict.
 _FETCH_JS = r"""
-async ({dn, csrf, dates, days_meta}) => {
+async ({dn, csrf, dates, days_meta, wstart, wend}) => {
   const H = {'NK':'NT','connect-csrf-token':csrf,'DI-Backend':'connectapi.garmin.com'};
   const j = async (p) => {
     try { const r = await fetch('https://connect.garmin.com/gc-api'+p,
@@ -50,8 +51,9 @@ async ({dn, csrf, dates, days_meta}) => {
       maxmet:  await j(`/metrics-service/metrics/maxmet/daily/${d}/${d}`),
     });
   }
-  const last = dates[dates.length - 1];
-  const weight = await j(`/weight-service/weight/range/${dates[0]}/${last}?includeAll=true`);
+  // Weigh-ins are sparse, so pull them over the whole activity window in one call —
+  // oldest to newest (the range API is directional; reversing it returns nothing).
+  const weight = await j(`/weight-service/weight/range/${wstart}/${wend}?includeAll=true`);
   const exerciseSets = {};
   for (const m of days_meta) {
     exerciseSets[m.id] = await j(`/activity-service/activity/${m.id}/exerciseSets`);
@@ -154,6 +156,8 @@ def pull(cfg, *, activity_days: int = 365, metric_days: int = 45, verbose: bool 
         say(f"pulling {metric_days} days of wellness + {len(strength_ids)} exercise sets...")
         bundle = page.evaluate(_FETCH_JS, {
             "dn": display_name, "csrf": token, "dates": dates, "days_meta": days_meta,
+            "wstart": (today - timedelta(days=activity_days)).isoformat(),
+            "wend": today.isoformat(),
         })
 
     return _ingest(cfg, activities_raw, bundle, activity_days, say)
@@ -189,12 +193,19 @@ def _ingest(cfg, activities_raw, bundle, activity_days, say) -> dict:
                                         d.get("hrv"), mm, weights.get(on)))
         days[-1] = replace(days[-1], source=Source.GARMIN_BROWSER)
 
+    # Weigh-ins are sparse and span far beyond the 45-day daily window, so they go
+    # in the measurements table (keyed on their own date), not onto a daily row that
+    # may not exist. `latest_weight` and the weight chart already union both sources.
+    weighins = _weighins_from_payload(bundle.get("weight") or {})
+
     with Store(cfg.db_path) as store:
         if acts:
             store.ingest_activities(min(a.start.date() for a in acts),
                                     max(a.start.date() for a in acts), acts)
         if days:
             store.ingest_daily(min(d.on for d in days), max(d.on for d in days), days)
+        for m in weighins:
+            store.record_measurement(m)
 
     # Exercise sets -> stored for progression
     n_sets = _store_exercise_sets(cfg, activities_raw, bundle.get("exerciseSets") or {})
@@ -205,10 +216,19 @@ def _ingest(cfg, activities_raw, bundle, activity_days, say) -> dict:
         "days": len(days),
         "measured_tdee_days": measured,
         "exercise_set_rows": n_sets,
+        "weigh_ins": len(weighins),
     }
     say(f"ingested {len(acts)} activities, {len(days)} days "
-        f"({measured} with TDEE), {n_sets} exercise-set rows")
+        f"({measured} with TDEE), {n_sets} exercise-set rows, {len(weighins)} weigh-ins")
     return summary
+
+
+def _weighins_from_payload(weight_json: dict) -> list[Measurement]:
+    """Every Garmin weigh-in as a weight-only Measurement, newest data wins per date."""
+    out: list[Measurement] = []
+    for on, grams in sorted(_weights_by_date(weight_json).items()):
+        out.append(Measurement(on=on, source=Source.GARMIN_BROWSER, weight=Grams(grams)))
+    return out
 
 
 def _weights_by_date(weight_json: dict) -> dict[date, int]:

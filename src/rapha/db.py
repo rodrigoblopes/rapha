@@ -268,6 +268,27 @@ class Store:
             for r in rows
         ]
 
+    def weight_history(self) -> list[tuple[date, int]]:
+        """Every weigh-in, oldest first, as (date, grams). Unions both sources.
+
+        Weigh-ins can arrive on a daily_metrics row (inside the metric window) or as
+        a measurement (a manual tape entry, or a Garmin weigh-in from beyond that
+        window). A date present in both — the same weigh-in seen twice — collapses to
+        one point, the measurement winning since that is where the full history lives.
+        """
+        by_date: dict[date, int] = {}
+        daily = self._conn.execute(
+            "SELECT on_date, weight_g FROM daily_metrics WHERE weight_g IS NOT NULL"
+        ).fetchall()
+        meas = self._conn.execute(
+            "SELECT on_date, weight_g FROM measurements WHERE weight_g IS NOT NULL"
+        ).fetchall()
+        for r in daily:  # measurements applied second so they win on a shared date
+            by_date[date.fromisoformat(r["on_date"])] = r["weight_g"]
+        for r in meas:
+            by_date[date.fromisoformat(r["on_date"])] = r["weight_g"]
+        return sorted(by_date.items())
+
     def latest_weight(self) -> Grams | None:
         """Most recent bodyweight from any source — scale, watch, or tape entry."""
         row = self._conn.execute(

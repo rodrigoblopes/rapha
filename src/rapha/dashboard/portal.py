@@ -155,6 +155,61 @@ def _spark(series: list, *, w=260, h=40, color="var(--accent)", lower_better=Fal
     )
 
 
+def _weight_chart(wv: dict, *, w=560, h=130) -> str:
+    """Weigh-ins as a solid line with dots, plus the dotted trend estimate.
+
+    Both series share one date-based x-axis and one kg y-axis, so the dotted line
+    sits honestly against the real points instead of a separate mini-plot.
+    """
+    from datetime import date as _date
+
+    actual = [(_date.fromisoformat(d), v) for d, v in wv.get("actual", [])]
+    est = [(_date.fromisoformat(d), v) for d, v in wv.get("estimate", [])]
+    if not actual:
+        return '<span class="note">No weigh-ins yet</span>'
+
+    all_dates = [d for d, _ in actual] + [d for d, _ in est]
+    all_vals = [v for _, v in actual] + [v for _, v in est]
+    x0, x1 = min(all_dates), max(all_dates)
+    span = (x1 - x0).days or 1
+    lo, hi = min(all_vals), max(all_vals)
+    pad = ((hi - lo) or 1) * 0.18
+    lo, hi = lo - pad, hi + pad
+    rng = (hi - lo) or 1
+
+    def px(d):
+        return round((d - x0).days / span * (w - 8) + 4, 1)
+
+    def py(v):
+        return round(h - 16 - (v - lo) / rng * (h - 28), 1)
+
+    apoly = " ".join(f"{px(d)},{py(v)}" for d, v in actual)
+    dots = "".join(f'<circle cx="{px(d)}" cy="{py(v)}" r="2.6" fill="var(--accent)"/>'
+                   for d, v in actual)
+    est_line = ""
+    if len(est) >= 2:
+        epoly = " ".join(f"{px(d)},{py(v)}" for d, v in est)
+        est_line = (f'<polyline points="{epoly}" fill="none" stroke="var(--dim)" '
+                    f'stroke-width="1.6" stroke-dasharray="5,4"/>')
+    # today guide + first/last value labels
+    today = _date.today()
+    tx = px(today) if x0 <= today <= x1 else None
+    guide = (f'<line x1="{tx}" y1="4" x2="{tx}" y2="{h - 12}" stroke="var(--line)" '
+             f'stroke-width="1" stroke-dasharray="2,3"/>') if tx is not None else ""
+    y_hi = f'<text x="2" y="12" fill="var(--dim)" font-size="10">{round(hi,1)} kg</text>'
+    y_lo = f'<text x="2" y="{h-4}" fill="var(--dim)" font-size="10">{round(lo,1)} kg</text>'
+    return (
+        f'<svg width="100%" height="{h}" viewBox="0 0 {w} {h}" '
+        f'preserveAspectRatio="none" style="max-width:100%">'
+        f'{guide}{est_line}'
+        f'<polyline points="{apoly}" fill="none" stroke="var(--accent)" '
+        f'stroke-width="2" stroke-linejoin="round"/>{dots}{y_hi}{y_lo}</svg>'
+        '<div class="note" style="margin-top:4px">'
+        '<span style="color:var(--accent)">●</span> weigh-ins &nbsp; '
+        '<span style="color:var(--dim)">– – –</span> trend estimate</div>'
+    )
+
+
 def _stat(n: Any, label: str) -> str:
     return f'<div class="stat"><div class="n">{_e(n)}</div><div class="l">{_e(label)}</div></div>'
 
@@ -453,8 +508,10 @@ def _progress_tab(b: dict) -> str:
   </div>
   <div class="card">
     <h2>Weight trend</h2>
-    {_spark(weights, w=560, color="var(--accent)")}
-    <div class="note">{'Latest ' + str(weights[-1][1]) + ' kg' if weights else 'No weigh-ins yet'}</div>
+    {_weight_chart(pr.get("weight_view", {}))}
+    <div class="note">{('Latest ' + str(weights[-1][1]) + ' kg · ' + str(len(weights))
+                        + ' weigh-ins') if weights else 'No weigh-ins yet'}</div>
+    <div class="note">{_e(pr.get("weight_view", {}).get("trend_note", ""))}</div>
   </div>
   <div class="card"><h2>Measurements</h2>{meas_html}</div>
   <div class="card">
