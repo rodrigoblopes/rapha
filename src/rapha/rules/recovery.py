@@ -31,6 +31,7 @@ class RecoverySignal:
     baseline: float | None
     good: bool | None          # True = favourable, False = unfavourable, None = no data
     note: str
+    higher_is_better: bool = True   # which direction of this metric is the good one
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +58,8 @@ def assess_recovery(days: list[DailyMetrics], *, today: date) -> RecoveryRead:
         latest = _mean([getter(d) for d in recent if getter(d) is not None])
         base = _mean([getter(d) for d in prior if getter(d) is not None])
         if latest is None or base is None:
-            signals.append(RecoverySignal(label, latest, base, None, "no recent reading"))
+            signals.append(RecoverySignal(label, latest, base, None, "no recent reading",
+                                          higher_is_better))
             return
         delta = latest - base
         favourable = (delta >= -tol) if higher_is_better else (delta <= tol)
@@ -67,6 +69,7 @@ def assess_recovery(days: list[DailyMetrics], *, today: date) -> RecoveryRead:
         signals.append(RecoverySignal(
             label, round(latest, 1), round(base, 1), favourable,
             f"{latest:.0f}{unit} vs {base:.0f}{unit} baseline — {direction}, {good_word}",
+            higher_is_better,
         ))
         votes.append(favourable)
 

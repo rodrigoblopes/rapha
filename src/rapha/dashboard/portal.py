@@ -225,8 +225,12 @@ def _today_tab(b: dict) -> str:
     sig_rows = ""
     for s in rec["signals"]:
         cls = "good" if s["good"] else ("bad" if s["good"] is False else "warn")
+        hib = s.get("higher_is_better", True)
+        dir_txt = "↑ higher is better" if hib else "↓ lower is better"
         sig_rows += (
-            f'<div class="sig"><span>{_e(s["label"])}</span>'
+            f'<div class="sig"><span>{_e(s["label"])} '
+            f'<span style="color:var(--dim);font-size:11px;font-weight:400">'
+            f'{dir_txt}</span></span>'
             f'<span class="v {cls}">{_e(s["note"])}</span></div>'
         )
 
@@ -236,6 +240,18 @@ def _today_tab(b: dict) -> str:
         else f'Day {tr.get("day","")}: <strong>{_e(tr.get("focus",""))}</strong> '
              f'({len(tr.get("exercises",[]))} exercises)'
     )
+
+    coach = b.get("coach", {})
+    coach_paras = "".join(f'<p style="margin:0 0 10px">{_e(p)}</p>'
+                          for p in coach.get("paragraphs", []))
+    coach_card = (f"""
+  <div class="card" style="border-left:3px solid var(--accent)">
+    <h2>Your day, in plain terms</h2>
+    {coach_paras}
+    <div class="note">Written from today's numbers — an observation, not a medical opinion.
+      Every call is yours.</div>
+  </div>""" if coach_paras else "")
+
     return f"""
 <div class="tab on" id="today">
   <div class="card">
@@ -243,6 +259,7 @@ def _today_tab(b: dict) -> str:
     <div class="pill {rec['status']}">{_recovery_emoji(rec['status'])} {_e(rec['headline'])}</div>
     <div style="margin-top:14px">{sig_rows}</div>
   </div>
+  {coach_card}
   <div class="row">
     <div class="card" style="flex:1;min-width:240px">
       <h2>Train</h2>

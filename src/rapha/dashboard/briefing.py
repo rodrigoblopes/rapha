@@ -138,7 +138,91 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     briefing["performance"] = _performance(days, acts, today)
     briefing["progression"] = _progression(cfg)
     briefing["progress"] = _progress(days, st, cfg, today, weight_hist)
+    briefing["coach"] = _coach(briefing, today)
     return briefing
+
+
+def _coach(b: dict, today: date) -> dict:
+    """A plain-language daily read, written the way a trainer would talk to you.
+
+    Everything on the dashboard is a number; this turns the numbers that matter
+    *today* into sentences someone with no sports-science background can act on. It
+    is generated deterministically from the same computed state (the portal rebuilds
+    on a timer, with no Claude in the loop), so it stays observational — it explains
+    what the data shows and what the plan calls for, and leaves the call to you.
+    """
+    ov = b["overview"]
+    rec = ov["recovery"]
+    meals = b.get("meals", {})
+    tr = b.get("training", {})
+    wv = b.get("progress", {}).get("weight_view", {})
+    paras: list[str] = []
+
+    status = rec["status"]
+    if status == "green":
+        paras.append(
+            "You're well recovered today. The four overnight signals your watch tracks — "
+            "heart-rate variability, resting pulse, stress and sleep — are all at or better "
+            "than your recent normal. That's your body telling you it's ready, so today is a "
+            "good day to train hard and chase your top sets."
+        )
+    elif status == "amber":
+        off = [s["label"].lower() for s in rec["signals"] if s["good"] is False]
+        names = " and ".join(off) if off else "one signal"
+        paras.append(
+            f"You're mostly recovered, but your {names} is off its usual mark this morning. "
+            "That's not a red light — it just means train as planned, but leave a rep in the "
+            "tank rather than grinding every set to failure."
+        )
+    else:
+        paras.append(
+            "Several of your overnight recovery signals are down today. Your body builds the "
+            "muscle you trained on the rest days, not the gym days — so a lighter session or a "
+            "full rest now will likely make the rest of the week's training better, not worse."
+        )
+
+    rate = wv.get("rate_kg_per_week")
+    if rate is not None:
+        if rate <= -0.2:
+            paras.append(
+                f"On the scale, you're trending down about {abs(rate)} kg a week since you "
+                "started. That's a controlled pace — fast enough to see fat come off, slow "
+                "enough to keep the muscle you're working for. Day-to-day weight is mostly "
+                "water; the dotted line on the Progress tab is the direction that counts."
+            )
+        elif rate >= 0.2:
+            paras.append(
+                f"On the scale, you're trending up about {rate} kg a week. If fat loss is the "
+                "aim right now, that's the number to keep an eye on — it usually means the food "
+                "is landing a little above what you're burning."
+            )
+        else:
+            paras.append(
+                "Your weight is holding roughly steady. In a body recomposition that's normal "
+                "and not a worry — the tape measure and the mirror show the change before the "
+                "scale does."
+            )
+
+    tgt, prot = meals.get("target_kcal"), meals.get("protein_g")
+    if tgt:
+        paras.append(
+            f"On the plate today: aim for around {tgt} calories, and the one number not to miss "
+            f"is {prot} grams of protein. Protein is what protects your muscle while you're "
+            "eating in a deficit — hit that and the rest of the day has room to flex."
+        )
+
+    if tr.get("rest"):
+        paras.append(
+            "No lifting session is scheduled today — it's a planned rest day, which is when the "
+            "work you've already put in actually turns into muscle."
+        )
+    elif tr.get("focus"):
+        paras.append(
+            f"Today's session is {tr['focus'].lower()} — {len(tr.get('exercises', []))} "
+            "exercises, laid out on the Training tab and ready to send to your watch."
+        )
+
+    return {"day": ov["day_of_60"], "status": status, "paragraphs": paras}
 
 
 def _recent_weight(days) -> Grams | None:
@@ -162,7 +246,8 @@ def _overview(days, acts, programmes, st, today) -> dict:
             "headline": recovery.headline,
             "signals": [
                 {"label": s.label, "latest": s.latest, "baseline": s.baseline,
-                 "good": s.good, "note": s.note}
+                 "good": s.good, "note": s.note,
+                 "higher_is_better": s.higher_is_better}
                 for s in recovery.signals
             ],
         },
