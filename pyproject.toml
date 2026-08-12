@@ -20,6 +20,18 @@ dev = [
 extract = [
     "faster-whisper>=1.0",
 ]
+# Attach to a logged-in Chrome over CDP to pull Garmin when the API is blocked
+# (ADR-008). Imported lazily by garmin/browser_pull.py, never at package import.
+browser = [
+    "playwright>=1.44",
+]
+# Convert phone photos (HEIC) to web-servable JPG for the upload endpoint (ADR-010).
+# HEIC is not decodable by the stdlib and the household shoots on iPhone. Imported
+# lazily by photos.py, never at package import.
+photos = [
+    "pillow>=10.0",
+    "pillow-heif>=0.16",
+]
 
 [project.scripts]
 rapha = "rapha.cli:main"

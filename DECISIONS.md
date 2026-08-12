@@ -237,3 +237,101 @@ so on a pre-v20 profile the route works.
 to this session, so it was not available regardless. And Playwright as a *first* resort — it is
 more exposed than the mobile flow (Cloudflare bot detection, and it needs a stored password or a
 persistent profile), so it stays the last rung of the ladder in CLAUDE.md.
+
+---
+
+## ADR-008 — Garmin data via a logged-in Chrome, attached over CDP
+
+**Date:** 2026-08-13
+
+ADR-007 left the automatic route (unofficial API) rate-limited and the cookie-reuse fallback
+defeated by App-Bound Encryption. The data still had to arrive. This is the rung that worked, and
+it is worth pinning because the *shape* of why it works is not obvious.
+
+**What failed first, precisely:** launching Chrome *from* Playwright trips Cloudflare — the
+automation flags are detectable and the session lands on the bot-check loop. Copying the user's
+Chrome profile does not help: the `v20` cookies are machine-bound and do not survive the copy, so
+the copied profile lands on the Garmin sign-in page. Driving the API cross-origin (`connectapi`)
+is blocked by CORS; the relative `/proxy/` base returns empty.
+
+**What works:** the user starts their *real* Chrome once with `--remote-debugging-port=9222` and a
+non-default `--user-data-dir` (Chrome 136+ refuses CDP on the default profile) and logs into Garmin
+**by hand** — Cloudflare trusts a human session. Playwright then *attaches* over CDP
+(`connect_over_cdp`) and never launches anything, so there are no automation flags to detect. From
+*inside* that authenticated page it calls Garmin's own `connect.garmin.com/gc-api/*` endpoints with
+the page's session cookies and its `connect-csrf-token` header (grabbed from an intercepted
+request). Read-only: it fetches, it never posts.
+
+**Why this respects ADR-001:** the session lives in the user's browser, not here. `rapha pull`
+holds no credential of its own — same invariant as `sync`, reached a different way. `playwright` is
+an optional extra (`browser`), imported lazily, so the core install is unaffected.
+
+**Endpoints, verified:** `activitylist-service` (activities), `usersummary-service` (TDEE, steps,
+stress, Body Battery), `wellness-service/dailySleepData`, `hrv-service`, `metrics-service/maxmet`
+(VO₂max), `weight-service/weight/range`, and — the reason to bother — `activity-service/
+activity/{id}/exerciseSets`, which reports every strength set's exercise, reps and weight in
+integer grams. That per-set detail is what the API summary throws away and what ADR-001's whole
+point (Módulo 17 progression) needs.
+
+**Known limitation:** exercise identity and weight are Garmin's *on-watch auto-detection*, not a
+logged prescription. A machine set can be mislabelled (an 83 kg "biceps curl" was really a machine
+row) and a plate weight guessed. The store records what Garmin reports faithfully; the dashboard
+reads the *trend across sessions*, not any single figure, and says so. Correcting the labels would
+be fabricating data.
+
+---
+
+## ADR-009 — The portal is one self-contained file, no network at render or view
+
+**Date:** 2026-07-24 (retroactively recorded)
+
+The portal renders to a single `index.html` with **all** CSS and JS inlined and no external
+requests — no CDN, no web font, no analytics, no framework. `dashboard/portal.py` already builds it
+this way and cites this ADR; the decision was simply never written down. Recorded now so the
+reference is not dangling.
+
+**Why:** the page displays real body metrics and is opened from `%RAPHA_HOME%\dist`. An external
+request from that page is a data-exfiltration path (a referrer, a cache key, an analytics beacon
+carrying the URL) and an availability dependency (a CDN that fails blanks the page). A single file
+has neither. It also means the page works opened directly off disk, and `serve` only has to hand
+over static bytes. Vanilla JS is enough for tab switching, a copy button, and the photo toggle;
+a framework would be weight and a supply-chain surface for no gain.
+
+**Consequence for later work:** anything added to the page inlines its assets. Charts are
+hand-rolled inline SVG sparklines, not a charting library, for exactly this reason.
+
+---
+
+## ADR-010 — One mutating endpoint: uploading a progress photo
+
+**Date:** 2026-08-13
+
+ADR-009's server was `GET`-only, by design — "no mutating endpoints, not 'none for now', none." A
+progress photo has to get from the phone into `%RAPHA_HOME%` somehow, and the alternatives are
+worse than a narrow endpoint: making the user hand-copy HEIC files into dated folders and run a
+converter, or teaching the credential-free server to reach out (which ADR-001 forbids). So the
+`GET`-only stance is reversed **once**, deliberately, the same way MrW's ADR-011 reversed its own.
+
+**Decision:** exactly one mutating route, `POST /upload/photo`. It accepts a single image
+(HEIC/HEIF/JPG/PNG), converts it to an upright JPEG (`photos.py`, via Pillow + pillow-heif — iPhones
+shoot HEIC and store orientation in EXIF), writes it under `data/photos/<date>/jpg/`, and
+re-renders the portal. It moves no money, touches no watch, holds no token, and writes nowhere but
+the photos inbox.
+
+**Security is structural, not conventional:**
+- Binds `127.0.0.1`, validates `Host` (DNS-rebinding defence) — unchanged from ADR-009.
+- Refuses cross-origin POSTs on two independent signals: `Sec-Fetch-Site` must be `same-origin`,
+  and `Origin` (if present) must match the portal's own port. It also *requires* a custom
+  `X-Filename` header, which a cross-origin page cannot set without a CORS preflight the server
+  never answers — so a malicious page cannot even reach the handler body.
+- Caps the body on its declared `Content-Length` **before reading a byte**, and sanitises the
+  filename to a bare stem (an upload cannot escape its folder or overwrite a sibling).
+- The re-render reaches only `dashboard.build → briefing/portal/photos`, none of which import a
+  Garmin token holder. A test (`test_the_upload_path_never_imports_a_garmin_token_holder`) pins
+  that ADR-001 still holds with the mutating endpoint present.
+
+**Rejected:** `multipart/form-data`. Parsing it needs `cgi` (removed in 3.13) or a hand-rolled
+multipart reader; a raw body with the name in a header is smaller, and requiring that header is
+itself the CSRF defence. `Pillow` + `pillow-heif` are a new dependency, justified here: HEIC is not
+decodable by the standard library and the household shoots exclusively on iPhone. Both go in the
+`photos` optional extra, so the core install stays at `garminconnect` + `pdfplumber`.
