@@ -38,26 +38,58 @@ def _state(cfg) -> dict:
     return {}
 
 
-def _bodyfat(cfg, st) -> tuple[int | None, str]:
+def _bodyfat(cfg, st, measurements=None) -> tuple[int | None, str]:
     """Best body-fat estimate (×10) and its source.
 
-    Prefer the Navy formula from tape measurements — objective and repeatable —
-    over the one-off photo estimate, but keep the photo number in the note when the
-    two disagree, because they carry different errors.
+    Prefer the Navy formula from the latest tape waist+neck — objective and
+    repeatable — over the one-off photo estimate, but keep the photo number in the
+    note when the two disagree, because they carry different errors.
     """
     from ..rules.measurements import navy_bodyfat_pct_x10
 
-    m = st.get("measurements") or {}
+    tape = _resolve_tape(measurements or [], st)
     height_mm = cfg.athlete_height_mm or 1770
-    if m.get("waist_mm") and m.get("neck_mm"):
-        navy = navy_bodyfat_pct_x10(m["waist_mm"], m["neck_mm"], height_mm,
+    if tape.get("waist_mm") and tape.get("neck_mm"):
+        navy = navy_bodyfat_pct_x10(tape["waist_mm"], tape["neck_mm"], height_mm,
                                     sex=cfg.athlete_sex)
         if navy is not None:
             photo = st.get("bodyfat_pct_x10")
             extra = (f" (photo estimate read ~{photo / 10:.0f}%; the tape is the "
                      "repeatable measure)") if photo else ""
-            return navy, f"Navy formula from tape, {m.get('measured_on', '')}{extra}"
+            return navy, f"Navy formula from tape, {tape.get('on', '')}{extra}"
     return st.get("bodyfat_pct_x10"), st.get("bodyfat_source", "")
+
+
+#: Circumference fields carried on a Measurement, in display order.
+_CIRC_ATTRS = ["waist", "neck", "hip", "chest", "arm", "thigh", "shoulders", "calf"]
+
+
+def _resolve_tape(measurements, st) -> dict:
+    """The latest circumference set, in millimetres, from the DB (state.json legacy
+    as a last resort). Wingspan is structural, so the most recent non-null wins."""
+    latest = next(
+        (m for m in reversed(measurements)
+         if any(getattr(m, a) for a in _CIRC_ATTRS)),
+        None,
+    )
+    wingspan = next((m.wingspan for m in reversed(measurements) if m.wingspan), None)
+
+    if latest is None:
+        legacy = st.get("measurements") or {}
+        if not legacy.get("neck_mm"):
+            return {}
+        return {"on": legacy.get("measured_on", ""),
+                "waist_mm": legacy.get("waist_mm"), "neck_mm": legacy.get("neck_mm"),
+                "wingspan_mm": legacy.get("wingspan_mm")}
+
+    def mv(q):
+        return q.value if q else None
+
+    out = {"on": latest.on.isoformat(), "notes": latest.notes,
+           "wingspan_mm": mv(wingspan)}
+    for a in _CIRC_ATTRS:
+        out[f"{a}_mm"] = mv(getattr(latest, a))
+    return out
 
 
 def _fmt(t: datetime) -> str:
@@ -114,6 +146,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     days: list = []
     acts: list = []
     weight_hist: list = []
+    measurements: list = []
     if cfg.db_path.is_file():
         with Store(cfg.db_path) as store:
             # Wide enough for the 1Y/All performance windows; the recovery and meal
@@ -121,6 +154,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
             days = store.daily_between(today - timedelta(days=400), today)
             acts = store.activities_between(today - timedelta(days=120), today)
             weight_hist = store.weight_history()
+            measurements = store.measurements()
 
     briefing: dict[str, Any] = {
         "generated": today.isoformat(),
@@ -136,10 +170,10 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
 
     briefing["overview"] = _overview(days, acts, programmes, st, today)
     briefing["training"] = _training(programmes, st, today)
-    briefing["meals"] = _meals(days, diets, foods, cfg, st, today)
+    briefing["meals"] = _meals(days, diets, foods, cfg, st, today, measurements)
     briefing["performance"] = _performance(days, acts, today, cfg.home)
     briefing["progression"] = _progression(cfg)
-    briefing["progress"] = _progress(days, st, cfg, today, weight_hist)
+    briefing["progress"] = _progress(days, st, cfg, today, weight_hist, measurements)
     briefing["coach"] = _coach(briefing, today)
     return briefing
 
@@ -335,7 +369,7 @@ def _training(programmes, st, today) -> dict:
     }
 
 
-def _meals(days, diets, foods, cfg, st, today) -> dict:
+def _meals(days, diets, foods, cfg, st, today, measurements=None) -> dict:
     from ..rules.energy import measured_tdee
     from ..rules.targeted_menu import build_targeted_day
     from ..units import Rounding, apply_bps
@@ -345,7 +379,7 @@ def _meals(days, diets, foods, cfg, st, today) -> dict:
     target = Kcal(tdee.value - apply_bps(tdee, cfg.deficit_bps, Rounding.DOWN).value)
     protein_g = weight.value * cfg.protein_g_per_kg_x10 // 10000
 
-    bf10, _ = _bodyfat(cfg, st)
+    bf10, _ = _bodyfat(cfg, st, measurements)
     direction, why = recompose_direction(bf10)
 
     # Solve real portions to hit the target exactly, rather than costing a fixed
@@ -588,27 +622,86 @@ def _read_photo_analysis(day_dir) -> dict | None:
     return {"headline": blocks[0] if blocks else "", "paragraphs": blocks[1:]}
 
 
-def _progress(days, st, cfg, today, weight_hist=None) -> dict:
+#: (attr, label, unit) for the measurement UI/history, in display order.
+_MEASURE_UI = [
+    ("weight", "Weight", "kg"), ("waist", "Waist", "cm"), ("neck", "Neck", "cm"),
+    ("chest", "Chest", "cm"), ("shoulders", "Shoulders", "cm"), ("arm", "Arm", "cm"),
+    ("thigh", "Thigh", "cm"), ("hip", "Hip", "cm"), ("calf", "Calf", "cm"),
+    ("wingspan", "Wingspan", "cm"),
+]
+
+
+def _measurement_views(measurements, today, protocol_start=None) -> dict:
+    """Per-field history + a since-protocol change, for the tape trends and the form.
+
+    ``series`` feeds tiny charts; ``latest`` prefills the edit form; ``changes`` is
+    the recomposition read — waist down while an arm holds is the story the scale
+    can't tell. The change is measured from the protocol start (falling back to the
+    first reading) so it lines up with the weight trend rather than blending in a
+    pre-cut bulk. weight is kg, the rest cm; the store keeps grams/mm.
+    """
+    def human(q, attr):
+        if q is None:
+            return None
+        return round(q.value / 1000, 1) if attr == "weight" else round(q.value / 10, 1)
+
+    series: dict[str, list] = {}
+    latest: dict[str, float] = {}
+    for attr, _label, _unit in _MEASURE_UI:
+        pts = [(m.on.isoformat(), human(getattr(m, attr), attr))
+               for m in measurements if getattr(m, attr) is not None]
+        if pts:
+            series[attr] = pts
+            latest[attr] = pts[-1][1]
+
+    changes = []
+    for attr, label, unit in _MEASURE_UI:
+        pts = series.get(attr)
+        if not pts or len(pts) < 2:
+            continue
+        scoped = ([p for p in pts if date.fromisoformat(p[0]) >= protocol_start]
+                  if protocol_start else pts)
+        if len(scoped) < 2:
+            scoped = pts
+        first, last = scoped[0][1], scoped[-1][1]
+        changes.append({"attr": attr, "label": label, "unit": unit,
+                        "first": first, "latest": last,
+                        "delta": round(last - first, 1), "points": len(scoped)})
+    return {"series": series, "latest": latest, "changes": changes}
+
+
+def _progress(days, st, cfg, today, weight_hist=None, measurements=None) -> dict:
     from ..rules.measurements import biotype
 
     weight_hist = weight_hist or []
+    measurements = measurements or []
     pstart = (date.fromisoformat(st["protocol_start"])
               if st.get("protocol_start") else None)
     weight_view = _weight_view(weight_hist, today, protocol_start=pstart)
     weights = weight_view["actual"]
 
-    bf10, bf_src = _bodyfat(cfg, st)
-    m = st.get("measurements") or {}
+    raw_tape = _resolve_tape(measurements, st)
+    bf10, bf_src = _bodyfat(cfg, st, measurements)
     height_mm = cfg.athlete_height_mm or 1770
+
+    def cm(key):
+        return raw_tape[key] / 10 if raw_tape.get(key) else None
+
     tape = {}
-    if m.get("neck_mm"):
+    if any(raw_tape.get(f"{a}_mm") for a in _CIRC_ATTRS) or raw_tape.get("wingspan_mm"):
         tape = {
-            "measured_on": m.get("measured_on", ""),
-            "neck_cm": m["neck_mm"] / 10,
-            "waist_cm": m["waist_mm"] / 10 if m.get("waist_mm") else None,
-            "wingspan_cm": m["wingspan_mm"] / 10 if m.get("wingspan_mm") else None,
-            "biotype": biotype(m["wingspan_mm"], height_mm) if m.get("wingspan_mm") else None,
+            "measured_on": raw_tape.get("on", ""),
+            "neck_cm": cm("neck_mm"), "waist_cm": cm("waist_mm"),
+            "chest_cm": cm("chest_mm"), "arm_cm": cm("arm_mm"),
+            "thigh_cm": cm("thigh_mm"), "shoulders_cm": cm("shoulders_mm"),
+            "hip_cm": cm("hip_mm"), "calf_cm": cm("calf_mm"),
+            "wingspan_cm": cm("wingspan_mm"),
+            "biotype": (biotype(raw_tape["wingspan_mm"], height_mm)
+                        if raw_tape.get("wingspan_mm") else None),
+            "notes": raw_tape.get("notes"),
         }
+
+    measure = _measurement_views(measurements, today, pstart)
 
     photos = []
     pdir = cfg.home / "data" / "photos"
@@ -630,6 +723,7 @@ def _progress(days, st, cfg, today, weight_hist=None) -> dict:
         "weight_series": weights,
         "weight_view": weight_view,
         "tape": tape,
+        "measure": measure,
         "photo_sets": photos,
         "note": (
             "Recomposition shows up in the tape and the mirror before the scale. "

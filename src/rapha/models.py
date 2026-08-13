@@ -75,6 +75,12 @@ class Measurement:
     Without a body-composition scale this is the only series that can separate fat
     loss from weight loss: waist and neck through the Navy formula. Photos and
     strength progression corroborate it; scale weight alone cannot (CLAUDE.md).
+
+    The circumferences beyond waist/neck (chest, arm, thigh, shoulders, calf) don't
+    feed a formula — they *are* the recomposition evidence: waist shrinking while an
+    arm or thigh holds or grows is fat loss with muscle kept, which the scale hides.
+    ``wingspan`` is a one-off structural number (biotype), not a series. Every field
+    is optional; ``None`` means *not measured*, never zero.
     """
 
     on: date
@@ -83,3 +89,10 @@ class Measurement:
     waist: Millimetres | None = None
     neck: Millimetres | None = None
     hip: Millimetres | None = None
+    chest: Millimetres | None = None
+    arm: Millimetres | None = None
+    thigh: Millimetres | None = None
+    shoulders: Millimetres | None = None
+    calf: Millimetres | None = None
+    wingspan: Millimetres | None = None
+    notes: str | None = None

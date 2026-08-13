@@ -335,3 +335,44 @@ multipart reader; a raw body with the name in a header is smaller, and requiring
 itself the CSRF defence. `Pillow` + `pillow-heif` are a new dependency, justified here: HEIC is not
 decodable by the standard library and the household shoots exclusively on iPhone. Both go in the
 `photos` optional extra, so the core install stays at `garminconnect` + `pdfplumber`.
+
+---
+
+## ADR-011 — A second mutating endpoint: editing body measurements
+
+**Date:** 2026-08-13
+
+Measurements used to live as a single snapshot in `state.json` (read-only, one date). To make
+them a first-class, editable time series that the analysis reads, they move into the SQLite
+`measurements` table and gain a write path: `POST /measurement`. This is the second deliberate
+exception to the server's default (ADR-010 was the first); the same structural safeguards apply,
+and it is still offline and credential-free.
+
+**Decision:** the portal's Progress tab carries an add/edit form (date, weight, and the
+circumferences: waist, neck, chest, shoulders, arm, thigh, hip, calf, plus the one-off wingspan).
+It POSTs JSON to `/measurement`, which validates and converts human units (cm, kg) to the store's
+integer millimetres and grams — the one place that conversion lives (`measurement_input.py`, pure
+and tested) — upserts, and re-renders. The endpoint reuses ADR-010's cross-origin refusal and
+size cap.
+
+**The merge is the crux.** `record_measurement` is a **field-level merge**, not a row replace: on a
+date that already has a row, only the fields the new entry carries overwrite; a `None` leaves the
+stored value alone. This is what lets a Garmin weigh-in (weight only) and a manual tape entry
+(waist, neck, …) share a date without clobbering each other — the latent bug the old full-row
+upsert had once weigh-ins started landing in this table — and it makes editing one field safe.
+Blank form fields are simply omitted, so you can log one number today and another next week.
+
+**Why cm/kg in, mm/g stored.** A tape reads centimetres and a scale kilograms; the store bans
+floats on every measurement path (`0.1 + 0.2` has no place in a body-fat number). So the form
+speaks human units and the boundary converts once, to integers.
+
+**New fields, and why.** Beyond waist/neck (which the Navy body-fat formula needs), the
+circumferences don't feed a formula — they *are* the recomposition evidence. Waist shrinking while
+an arm or thigh holds is muscle kept through a cut, which the scale alone hides. The change is
+measured from the protocol start (like the weight trend), so it doesn't blend a pre-cut bulk into
+the read. Adding columns to an existing database is handled by a small `PRAGMA table_info` diff at
+open time — SQLite has no `ADD COLUMN IF NOT EXISTS`.
+
+**Schema migration on the existing DB.** Old databases gain the new columns automatically on next
+open; the legacy `state.json` measurement is seeded into the table once, after which the table is
+the single source and `state.json` keeps only protocol config.

@@ -57,14 +57,39 @@ CREATE TABLE IF NOT EXISTS activities (
 CREATE INDEX IF NOT EXISTS activities_on_date ON activities(on_date);
 
 CREATE TABLE IF NOT EXISTS measurements (
-    on_date   TEXT PRIMARY KEY,
-    source    TEXT NOT NULL,
-    weight_g  INTEGER,
-    waist_mm  INTEGER,
-    neck_mm   INTEGER,
-    hip_mm    INTEGER
+    on_date       TEXT PRIMARY KEY,
+    source        TEXT NOT NULL,
+    weight_g      INTEGER,
+    waist_mm      INTEGER,
+    neck_mm       INTEGER,
+    hip_mm        INTEGER,
+    chest_mm      INTEGER,
+    arm_mm        INTEGER,
+    thigh_mm      INTEGER,
+    shoulders_mm  INTEGER,
+    calf_mm       INTEGER,
+    wingspan_mm   INTEGER,
+    notes         TEXT
 );
 """
+
+#: Columns added after the table first shipped. SQLite has no "ADD COLUMN IF NOT
+#: EXISTS", so we diff against PRAGMA table_info and add what's missing — existing
+#: databases gain the new measurement fields without a manual migration.
+_MEASUREMENT_COLUMNS = {
+    "chest_mm": "INTEGER", "arm_mm": "INTEGER", "thigh_mm": "INTEGER",
+    "shoulders_mm": "INTEGER", "calf_mm": "INTEGER", "wingspan_mm": "INTEGER",
+    "notes": "TEXT",
+}
+
+#: (column, Measurement attribute) for every quantity field, in one place so the
+#: upsert and the read stay in lockstep. ``weight`` is Grams; the rest Millimetres.
+_MEASUREMENT_FIELDS = [
+    ("weight_g", "weight"), ("waist_mm", "waist"), ("neck_mm", "neck"),
+    ("hip_mm", "hip"), ("chest_mm", "chest"), ("arm_mm", "arm"),
+    ("thigh_mm", "thigh"), ("shoulders_mm", "shoulders"), ("calf_mm", "calf"),
+    ("wingspan_mm", "wingspan"),
+]
 
 
 def _q(cls: type, value: int | None):
@@ -86,6 +111,16 @@ class Store:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(SCHEMA)
+        self._migrate_measurements()
+
+    def _migrate_measurements(self) -> None:
+        have = {r["name"] for r in
+                self._conn.execute("PRAGMA table_info(measurements)").fetchall()}
+        for col, coltype in _MEASUREMENT_COLUMNS.items():
+            if col not in have:
+                self._conn.execute(
+                    f"ALTER TABLE measurements ADD COLUMN {col} {coltype}"
+                )
 
     def __enter__(self) -> Self:
         return self
@@ -186,23 +221,30 @@ class Store:
             )
 
     def record_measurement(self, m: Measurement) -> None:
-        """Manual tape entries are one row at a time — no window, no batch."""
+        """Add or edit one date's measurement — a **merge**, not a replace.
+
+        On a date that already has a row, only the fields this entry actually carries
+        overwrite; a ``None`` leaves the stored value alone. That is what lets a Garmin
+        weigh-in (weight only) and a manual tape entry (waist, neck, …) share a date
+        without either clobbering the other, and it makes an edit that touches one
+        field safe. Source is set on first write and then left, since a merged row
+        genuinely has mixed origins.
+        """
+        cols = ["on_date", "source"] + [c for c, _ in _MEASUREMENT_FIELDS] + ["notes"]
+        placeholders = ",".join("?" * len(cols))
+        updates = ", ".join(
+            f"{c}=COALESCE(excluded.{c}, measurements.{c})"
+            for c, _ in _MEASUREMENT_FIELDS
+        )
+        updates += ", notes=COALESCE(excluded.notes, measurements.notes)"
+        values = [m.on.isoformat(), m.source.value]
+        values += [_v(getattr(m, attr)) for _, attr in _MEASUREMENT_FIELDS]
+        values.append(m.notes)
         with self._transaction():
             self._conn.execute(
-                """INSERT INTO measurements (on_date, source, weight_g, waist_mm, neck_mm, hip_mm)
-                   VALUES (?,?,?,?,?,?)
-                   ON CONFLICT(on_date) DO UPDATE SET
-                       source=excluded.source, weight_g=excluded.weight_g,
-                       waist_mm=excluded.waist_mm, neck_mm=excluded.neck_mm,
-                       hip_mm=excluded.hip_mm""",
-                (
-                    m.on.isoformat(),
-                    m.source.value,
-                    _v(m.weight),
-                    _v(m.waist),
-                    _v(m.neck),
-                    _v(m.hip),
-                ),
+                f"INSERT INTO measurements ({','.join(cols)}) VALUES ({placeholders}) "
+                f"ON CONFLICT(on_date) DO UPDATE SET {updates}",
+                values,
             )
 
     # ── read ─────────────────────────────────────────────────────────────────
@@ -252,21 +294,36 @@ class Store:
             for r in rows
         ]
 
+    @staticmethod
+    def _measurement_from_row(r: sqlite3.Row) -> Measurement:
+        return Measurement(
+            on=date.fromisoformat(r["on_date"]),
+            source=Source(r["source"]),
+            weight=_q(Grams, r["weight_g"]),
+            waist=_q(Millimetres, r["waist_mm"]),
+            neck=_q(Millimetres, r["neck_mm"]),
+            hip=_q(Millimetres, r["hip_mm"]),
+            chest=_q(Millimetres, r["chest_mm"]),
+            arm=_q(Millimetres, r["arm_mm"]),
+            thigh=_q(Millimetres, r["thigh_mm"]),
+            shoulders=_q(Millimetres, r["shoulders_mm"]),
+            calf=_q(Millimetres, r["calf_mm"]),
+            wingspan=_q(Millimetres, r["wingspan_mm"]),
+            notes=r["notes"],
+        )
+
     def measurements(self) -> list[Measurement]:
         rows = self._conn.execute(
             "SELECT * FROM measurements ORDER BY on_date"
         ).fetchall()
-        return [
-            Measurement(
-                on=date.fromisoformat(r["on_date"]),
-                source=Source(r["source"]),
-                weight=_q(Grams, r["weight_g"]),
-                waist=_q(Millimetres, r["waist_mm"]),
-                neck=_q(Millimetres, r["neck_mm"]),
-                hip=_q(Millimetres, r["hip_mm"]),
-            )
-            for r in rows
-        ]
+        return [self._measurement_from_row(r) for r in rows]
+
+    def latest_measurement(self) -> Measurement | None:
+        """The most recent measurement row, or None if none recorded."""
+        row = self._conn.execute(
+            "SELECT * FROM measurements ORDER BY on_date DESC LIMIT 1"
+        ).fetchone()
+        return None if row is None else self._measurement_from_row(row)
 
     def weight_history(self) -> list[tuple[date, int]]:
         """Every weigh-in, oldest first, as (date, grams). Unions both sources.

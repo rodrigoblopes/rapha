@@ -15,12 +15,13 @@ Security properties, all deliberate:
   localhost services: a malicious page in your browser can otherwise reach them.
 - Emits no CORS headers, so a cross-origin page cannot read a response even if it
   manages to send a request.
-- **Exactly ONE mutating endpoint (ADR-008): ``POST /upload/photo`` saves a
-  progress photo (HEIC/JPG/PNG) under ``%RAPHA_HOME%`` and re-renders.** It refuses
-  cross-origin POSTs (``Sec-Fetch-Site`` + ``Origin`` checks, and it needs a custom
-  header a cross-origin page cannot set without a preflight we never answer),
-  size-caps the body before reading it, sanitises the filename, and touches no bank,
-  no watch and no token. Nothing else mutates.
+- **Two mutating endpoints, both offline and credential-free:** ``POST /upload/photo``
+  (ADR-010) saves a progress photo (HEIC/JPG/PNG) under ``%RAPHA_HOME%``;
+  ``POST /measurement`` (ADR-011) upserts a manual body measurement into SQLite. Both
+  refuse cross-origin POSTs (``Sec-Fetch-Site`` + ``Origin`` checks), size-cap the body
+  before reading it, validate their input, re-render, and touch no bank, no watch and
+  no token. Nothing else mutates — no endpoint moves money, edits a Garmin record, or
+  writes outside ``%RAPHA_HOME%``.
 """
 
 from __future__ import annotations
@@ -103,60 +104,96 @@ class PortalHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:
-        from .photos import MAX_BYTES, PhotoError, ingest_photo
-
         if not self._host_is_allowed():
             self.send_error(403, "Host not allowed")
             return
         if not self._is_same_origin():
             self.send_error(403, "cross-origin POST refused")
             return
-        if self.path != "/upload/photo":
+        if self.path == "/upload/photo":
+            self._handle_photo_upload()
+        elif self.path == "/measurement":
+            self._handle_measurement()
+        else:
             self.send_error(404, "no such endpoint")
-            return
 
+    def _read_capped_body(self, cap: int) -> bytes | None:
+        """Read the body if its declared length is within cap; else send the error."""
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             self.send_error(400, "bad Content-Length")
-            return
-        # Cap on the declared size, before reading a byte of the body.
-        if length <= 0 or length > MAX_BYTES:
-            self.send_error(413, "empty or oversize upload")
-            return
+            return None
+        if length <= 0 or length > cap:
+            self.send_error(413, "empty or oversize body")
+            return None
+        return self.rfile.read(length)
 
+    def _rerender(self, cfg) -> bool:
+        """Re-render the portal after a good write. Never raises — a render failure
+        must not lose the write, so it is reported, not thrown."""
+        try:
+            from .dashboard.build import render
+
+            render(cfg)
+            return True
+        except Exception as e:
+            _log(f"rebuild after write failed: {e}")
+            return False
+
+    def _handle_photo_upload(self) -> None:
+        from .photos import MAX_BYTES, PhotoError, ingest_photo
+
+        data = self._read_capped_body(MAX_BYTES)
+        if data is None:
+            return
         filename = self.headers.get("X-Filename", "")
         if not filename:
             self._json(400, {"ok": False, "error": "missing X-Filename header"})
             return
-
-        data = self.rfile.read(length)
         cfg = getattr(self.server, "rapha_cfg", None)
         if cfg is None:  # pragma: no cover - serve() always sets it
             self._json(500, {"ok": False, "error": "server misconfigured"})
             return
-
         try:
             dest = ingest_photo(cfg, filename, data)
         except PhotoError as e:
             self._json(400, {"ok": False, "error": str(e)})
             return
-
-        # Re-render so the new photo shows in the gallery immediately. A failure
-        # here must not lose the saved file — report saved-but-not-rendered.
-        try:
-            from .dashboard.build import render
-
-            render(cfg)
-        except Exception as e:
-            _log(f"rebuild after upload failed: {e}")
-            self._json(200, {"ok": True, "saved": dest.name, "rendered": False,
-                             "date": dest.parent.parent.name})
-            return
-
+        rendered = self._rerender(cfg)
         _log(f"stored progress photo {dest}")
-        self._json(200, {"ok": True, "saved": dest.name, "rendered": True,
+        self._json(200, {"ok": True, "saved": dest.name, "rendered": rendered,
                          "date": dest.parent.parent.name})
+
+    def _handle_measurement(self) -> None:
+        from .db import Store
+        from .measurement_input import MeasurementError, measurement_from_form
+
+        data = self._read_capped_body(16 * 1024)  # a form is tiny; cap hard
+        if data is None:
+            return
+        try:
+            payload = json.loads(data.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            self._json(400, {"ok": False, "error": "body is not valid JSON"})
+            return
+        if not isinstance(payload, dict):
+            self._json(400, {"ok": False, "error": "expected a JSON object"})
+            return
+        cfg = getattr(self.server, "rapha_cfg", None)
+        if cfg is None:  # pragma: no cover - serve() always sets it
+            self._json(500, {"ok": False, "error": "server misconfigured"})
+            return
+        try:
+            m = measurement_from_form(payload)
+        except MeasurementError as e:
+            self._json(400, {"ok": False, "error": str(e)})
+            return
+        with Store(cfg.db_path) as store:
+            store.record_measurement(m)
+        rendered = self._rerender(cfg)
+        _log(f"recorded measurement for {m.on}")
+        self._json(200, {"ok": True, "date": m.on.isoformat(), "rendered": rendered})
 
     def end_headers(self) -> None:
         # No CORS. No caching of a page that changes every rebuild.

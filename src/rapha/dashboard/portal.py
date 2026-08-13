@@ -46,6 +46,11 @@ nav button.on{background:var(--accent);border-color:var(--accent);color:#0d1017}
   padding:5px 13px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer}
 .tfbar button.on{background:var(--accent);border-color:var(--accent);color:#0d1017}
 .dirtag{color:var(--dim);font-size:11px;font-weight:400}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:10px}
+.mfield{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--dim)}
+.mfield em{font-style:normal;font-size:11px;opacity:.7}
+.mfield input{background:var(--card2);border:1px solid var(--line);color:var(--ink);
+  border-radius:8px;padding:8px 10px;font-size:14px;width:100%;box-sizing:border-box}
 main{max-width:900px;margin:0 auto;padding:4px 20px 80px}
 .tab{display:none}.tab.on{display:block;animation:f .2s ease}
 @keyframes f{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
@@ -172,6 +177,31 @@ function _drawIntraday(){
   const el=document.getElementById('intraday-hr'); if(!el) return;
   const hr=((window.PERF_INTRADAY||{}).hr)||[];
   _drawLine(el, hr, 'var(--red)');
+}
+function toggleMeasForm(btn){
+  const f=document.getElementById('measform');
+  const shown=f.style.display!=='none';
+  f.style.display=shown?'none':'block';
+  btn.textContent=shown?'Add / edit measurement':'Hide form';
+  if(!shown){ const d=document.getElementById('m_date');
+    if(d&&!d.value) d.value=new Date().toISOString().slice(0,10); }
+}
+async function saveMeasurement(btn){
+  const status=document.getElementById('mstatus');
+  const attrs=['weight','waist','neck','chest','shoulders','arm','thigh','hip','calf','wingspan'];
+  const body={date:(document.getElementById('m_date')||{}).value||''};
+  attrs.forEach(function(a){ const el=document.getElementById('m_'+a);
+    if(el&&el.value!=='') body[a]=el.value; });
+  const n=document.getElementById('m_notes'); if(n&&n.value) body.notes=n.value;
+  status.textContent='Saving\\u2026';
+  try{
+    const r=await fetch('/measurement',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await r.json().catch(function(){return {};});
+    if(r.ok&&j.ok){ status.textContent='Saved \\u2713 reloading\\u2026';
+      setTimeout(function(){location.reload();},600); }
+    else{ status.textContent='Failed: '+((j&&j.error)||('HTTP '+r.status)); }
+  }catch(e){ status.textContent='Error: '+e+' (is the portal served by rapha serve?)'; }
 }
 function openLightbox(src){
   const lb=document.getElementById('lightbox'); if(!lb) return;
@@ -617,6 +647,81 @@ def _photo_analysis_html(analysis: dict | None) -> str:
             f'var(--accent);margin:6px 0 12px">{body}</div>')
 
 
+# (attr, label, human unit) — the fields the measurement form and history show.
+_MEASURE_FIELDS = [
+    ("weight", "Weight", "kg"), ("waist", "Waist", "cm"), ("neck", "Neck", "cm"),
+    ("chest", "Chest", "cm"), ("shoulders", "Shoulders", "cm"), ("arm", "Arm", "cm"),
+    ("thigh", "Thigh", "cm"), ("hip", "Hip", "cm"), ("calf", "Calf", "cm"),
+    ("wingspan", "Wingspan", "cm"),
+]
+# For circumferences: is a DROP the good direction? Waist yes (fat); muscles no.
+_LOWER_IS_BETTER = {"waist", "hip"}
+
+
+def _measurements_card(pr: dict) -> str:
+    tape = pr.get("tape") or {}
+    measure = pr.get("measure") or {}
+    latest = measure.get("latest", {})
+    changes = measure.get("changes", [])
+
+    # Current values as tags
+    tags = ""
+    for attr, label, unit in _MEASURE_FIELDS:
+        v = latest.get(attr)
+        if v is not None:
+            tags += f'<span class="tag">{_e(label)}: {_e(v)} {_e(unit)}</span>'
+    tags_html = (tags + f'<div class="note">Latest tape: {_e(tape.get("measured_on","—"))}'
+                 + (f' · biotype {_e(tape["biotype"])}' if tape.get("biotype") else '')
+                 + '</div>') if tags else (
+        '<div class="note">No measurements yet — add your waist and neck below and '
+        'the Navy body-fat estimate starts tracking.</div>')
+
+    # Recomposition changes (since protocol start)
+    change_html = ""
+    for c in changes:
+        drop_good = c["attr"] in _LOWER_IS_BETTER
+        d = c["delta"]
+        if d == 0:
+            col, arrow = "var(--dim)", "→"
+        else:
+            good = (d < 0) if drop_good else (d > 0)
+            col = "var(--accent)" if good else "var(--amber)"
+            arrow = "▼" if d < 0 else "▲"
+        change_html += (
+            f'<span class="tag" style="color:{col}">{_e(c["label"])} '
+            f'{arrow} {_e(abs(d))} {_e(c["unit"])}</span>')
+    change_block = (f'<div class="note" style="margin-top:6px">Change since you started '
+                    f'measuring:</div><div>{change_html}</div>' if change_html else '')
+
+    # Add / edit form — prefilled with the latest values
+    inputs = ""
+    for attr, label, unit in _MEASURE_FIELDS:
+        val = latest.get(attr, "")
+        inputs += (
+            f'<label class="mfield"><span>{_e(label)} <em>{_e(unit)}</em></span>'
+            f'<input type="number" step="0.1" min="0" id="m_{attr}" '
+            f'value="{_e(val)}" placeholder="—"></label>')
+
+    return f"""
+  <div class="card">
+    <h2>Measurements</h2>
+    <div>{tags_html}</div>
+    {change_block}
+    <button class="copy" style="margin-top:12px" onclick="toggleMeasForm(this)">Add / edit measurement</button>
+    <div id="measform" style="display:none;margin-top:12px">
+      <div class="note">Enter what you measured today — leave the rest blank; blank
+        fields keep their last value. Waist + neck drive the body-fat estimate.</div>
+      <label class="mfield"><span>Date</span>
+        <input type="date" id="m_date"></label>
+      <div class="mgrid">{inputs}</div>
+      <label class="mfield" style="grid-column:1/-1"><span>Notes</span>
+        <input type="text" id="m_notes" placeholder="optional"></label>
+      <button class="copy" style="margin-top:10px" onclick="saveMeasurement(this)">Save measurement</button>
+      <span class="note" id="mstatus" style="margin-left:10px"></span>
+    </div>
+  </div>"""
+
+
 def _progress_tab(b: dict) -> str:
     pr = b.get("progress", {})
     ath = b.get("athlete", {})
@@ -633,19 +738,6 @@ def _progress_tab(b: dict) -> str:
                        f'<div class="photos">{imgs}</div>')
 
     weights = pr.get("weight_series", [])
-    tape = pr.get("tape") or {}
-    if tape.get("neck_cm"):
-        parts = []
-        if tape.get("waist_cm"):
-            parts.append(f'<span class="tag">waist: {_e(tape["waist_cm"])} cm</span>')
-        parts.append(f'<span class="tag">neck: {_e(tape["neck_cm"])} cm</span>')
-        if tape.get("wingspan_cm"):
-            parts.append(f'<span class="tag">wingspan: {_e(tape["wingspan_cm"])} cm</span>')
-        meas_html = ("".join(parts)
-                     + f'<div class="note">Measured {_e(tape.get("measured_on",""))}</div>')
-    else:
-        meas_html = ('<div class="note">No tape measurements yet — waist + neck lets me '
-                     'track body fat by the Navy formula every 15 days.</div>')
 
     return f"""
 <div class="tab" id="progress">
@@ -666,7 +758,7 @@ def _progress_tab(b: dict) -> str:
                         + ' weigh-ins') if weights else 'No weigh-ins yet'}</div>
     <div class="note">{_e(pr.get("weight_view", {}).get("trend_note", ""))}</div>
   </div>
-  <div class="card"><h2>Measurements</h2>{meas_html}</div>
+  {_measurements_card(pr)}
   <div class="card">
     <h2>Progress photos</h2>
     <label class="copy" style="cursor:pointer;display:inline-block">Upload photos

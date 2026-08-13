@@ -8,6 +8,7 @@ security decisions (cross-origin refusal, path, size, header) without a live por
 from __future__ import annotations
 
 import io
+import json
 from types import SimpleNamespace
 
 from rapha import photos, server
@@ -132,6 +133,68 @@ class TestHappyPath:
         assert rec.json[0] == 200  # the save is not lost
         assert rec.json[1]["ok"] is True
         assert rec.json[1]["rendered"] is False
+
+
+class TestMeasurementEndpoint:
+    def test_a_good_measurement_is_stored_and_rendered(self, tmp_path, monkeypatch):
+        cfg = SimpleNamespace(db_path=tmp_path / "r.db", photos_dir=tmp_path / "p",
+                              dist_dir=tmp_path / "d")
+        recorded = {}
+
+        class FakeStore:
+            def __init__(self, path):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def record_measurement(self, m):
+                recorded["waist"] = m.waist.value if m.waist else None
+                recorded["date"] = m.on.isoformat()
+
+        import rapha.dashboard.build as build_mod
+        import rapha.db as db_mod
+        monkeypatch.setattr(db_mod, "Store", FakeStore)
+        monkeypatch.setattr(build_mod, "render", lambda cfg: (tmp_path / "i.html", {}))
+
+        body = json.dumps({"date": "2026-08-13", "waist": "93.5"}).encode()
+        h, rec = _handler(
+            _same_origin({"Content-Length": str(len(body)), "Content-Type": "application/json"}),
+            body=body, cfg=cfg,
+        )
+        h.path = "/measurement"
+        h.do_POST()
+
+        assert rec.json == (200, {"ok": True, "date": "2026-08-13", "rendered": True})
+        assert recorded == {"waist": 935, "date": "2026-08-13"}
+
+    def test_invalid_json_is_400(self, tmp_path):
+        cfg = SimpleNamespace(db_path=tmp_path / "r.db")
+        h, rec = _handler(_same_origin({"Content-Length": "3"}), body=b"{ x", cfg=cfg)
+        h.path = "/measurement"
+        h.do_POST()
+        assert rec.json[0] == 400
+
+    def test_a_measurement_with_a_bad_value_is_400(self, tmp_path):
+        cfg = SimpleNamespace(db_path=tmp_path / "r.db")
+        body = json.dumps({"waist": "abc"}).encode()
+        h, rec = _handler(_same_origin({"Content-Length": str(len(body))}), body=body, cfg=cfg)
+        h.path = "/measurement"
+        h.do_POST()
+        assert rec.json[0] == 400
+
+    def test_a_cross_origin_measurement_is_refused(self, tmp_path):
+        body = json.dumps({"waist": "90"}).encode()
+        h, rec = _handler(
+            _same_origin({"Sec-Fetch-Site": "cross-site", "Content-Length": str(len(body))}),
+            body=body,
+        )
+        h.path = "/measurement"
+        h.do_POST()
+        assert rec.error[0] == 403
 
 
 def test_the_upload_path_never_imports_a_garmin_token_holder():
