@@ -569,6 +569,25 @@ def _weight_view(weight_hist, today, *, protocol_start=None,
     return view
 
 
+def _read_photo_analysis(day_dir) -> dict | None:
+    """The written physique review for one photo set, if it has been done.
+
+    A body photo needs eyes on it — the credential-free static server cannot run
+    vision — so the review is written (by Claude, in session) to ``analysis.md`` next
+    to the set, and the portal renders whatever is there. A set with no file yet shows
+    a 'pending' state rather than a fabricated read. First line is the headline; the
+    rest are paragraphs split on blank lines.
+    """
+    path = day_dir / "analysis.md"
+    if not path.is_file():
+        return None
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return None
+    blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
+    return {"headline": blocks[0] if blocks else "", "paragraphs": blocks[1:]}
+
+
 def _progress(days, st, cfg, today, weight_hist=None) -> dict:
     from ..rules.measurements import biotype
 
@@ -600,7 +619,8 @@ def _progress(days, st, cfg, today, weight_hist=None) -> dict:
             imgs = sorted(p.name for p in src.glob("*.jpg"))
             if imgs:
                 photos.append({"date": day_dir.name, "images": imgs,
-                               "subdir": "jpg" if jpg.is_dir() else ""})
+                               "subdir": "jpg" if jpg.is_dir() else "",
+                               "analysis": _read_photo_analysis(day_dir)})
 
     return {
         "bodyfat_pct": (bf10 / 10) if bf10 is not None else None,

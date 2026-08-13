@@ -82,7 +82,15 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 .gsheet{background:var(--card2);border:1px dashed var(--line);border-radius:11px;padding:14px;
   font:13px/1.7 ui-monospace,"SF Mono",Menlo,monospace;white-space:pre-wrap;overflow-x:auto}
 .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
-.photos img{width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+.photos img{width:100%;border-radius:10px;border:1px solid var(--line);display:block;
+  cursor:zoom-in;transition:transform .1s}
+.photos img:hover{transform:scale(1.02)}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;z-index:100;
+  cursor:zoom-out;align-items:center;justify-content:center}
+.lightbox.on{display:flex}
+.lightbox img{max-width:96vw;max-height:96vh;object-fit:contain;border-radius:6px}
+.lightbox .x{position:fixed;top:14px;right:20px;color:#fff;font-size:34px;
+  cursor:pointer;line-height:1;font-weight:300}
 button.copy{background:var(--accent);color:#0d1017;border:none;border-radius:8px;
   padding:8px 14px;font-weight:600;cursor:pointer;font-size:13px;margin-top:10px}
 .spark{display:block}
@@ -165,6 +173,15 @@ function _drawIntraday(){
   const hr=((window.PERF_INTRADAY||{}).hr)||[];
   _drawLine(el, hr, 'var(--red)');
 }
+function openLightbox(src){
+  const lb=document.getElementById('lightbox'); if(!lb) return;
+  document.getElementById('lightbox-img').src=src;
+  lb.classList.add('on');
+}
+function closeLightbox(){
+  const lb=document.getElementById('lightbox'); if(lb) lb.classList.remove('on');
+}
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeLightbox(); });
 window.addEventListener('DOMContentLoaded',function(){
   _drawIntraday();
   const b=document.querySelector('#perfbar button.def'); if(b) b.click();
@@ -588,6 +605,18 @@ def _progression_card(pg: dict) -> str:
   </div>"""
 
 
+def _photo_analysis_html(analysis: dict | None) -> str:
+    """The written physique review for one set, or a 'pending' note if not done yet."""
+    if not analysis:
+        return ('<div class="note" style="margin:2px 0 8px">📋 Analysis pending — '
+                'it appears here once the set has been reviewed.</div>')
+    body = f'<p style="margin:0 0 8px"><strong>{_e(analysis.get("headline",""))}</strong></p>'
+    body += "".join(f'<p style="margin:0 0 8px">{_e(p)}</p>'
+                    for p in analysis.get("paragraphs", []))
+    return (f'<div class="card" style="background:var(--card2);border-left:3px solid '
+            f'var(--accent);margin:6px 0 12px">{body}</div>')
+
+
 def _progress_tab(b: dict) -> str:
     pr = b.get("progress", {})
     ath = b.get("athlete", {})
@@ -595,10 +624,13 @@ def _progress_tab(b: dict) -> str:
     photo_html = ""
     for pset in pr.get("photo_sets", []):
         imgs = "".join(
-            f'<img src="/photos/{_e(pset["date"])}/{_e(img)}" alt="progress photo" loading="lazy">'
+            f'<img src="/photos/{_e(pset["date"])}/{_e(img)}" alt="progress photo" '
+            f'loading="lazy" onclick="openLightbox(this.src)">'
             for img in pset["images"]
         )
-        photo_html += f'<h2>{_e(pset["date"])}</h2><div class="photos">{imgs}</div>'
+        photo_html += (f'<h2 style="margin-top:18px">{_e(pset["date"])}</h2>'
+                       f'{_photo_analysis_html(pset.get("analysis"))}'
+                       f'<div class="photos">{imgs}</div>')
 
     weights = pr.get("weight_series", [])
     tape = pr.get("tape") or {}
@@ -677,6 +709,9 @@ def render(b: dict) -> str:
         + '<div class="disclaimer">Observations against Projeto 60 Dias and published '
           'nutrition science — not medical advice. Every decision is yours.</div>'
         '</main>'
+        '<div class="lightbox" id="lightbox" onclick="closeLightbox()">'
+        '<span class="x" onclick="closeLightbox()">&times;</span>'
+        '<img id="lightbox-img" src="" alt="enlarged progress photo"></div>'
         f"<script>{JS}</script>"
     )
 
