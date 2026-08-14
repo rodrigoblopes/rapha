@@ -24,11 +24,12 @@ CSS = """
 :root{
   --bg:#0d1017;--card:#161b24;--card2:#1b212c;--line:#28303d;--ink:#e8ecf3;
   --dim:#95a0b3;--accent:#7dd3a0;--amber:#e5b567;--red:#e0776f;--blue:#6cb6e5;
-  --shadow:0 1px 3px rgba(0,0,0,.4)
+  --cyan:#5ccfe6;--shadow:0 1px 3px rgba(0,0,0,.4)
 }
 @media(prefers-color-scheme:light){:root{
   --bg:#f4f6f9;--card:#fff;--card2:#f7f9fc;--line:#e4e8ef;--ink:#1a1f28;--dim:#5c6675;
-  --accent:#2e9e6b;--amber:#b8862d;--red:#c9564c;--blue:#2f7cb5;--shadow:0 1px 3px rgba(0,0,0,.08)}}
+  --accent:#2e9e6b;--amber:#b8862d;--red:#c9564c;--blue:#2f7cb5;--cyan:#0e8aa0;
+  --shadow:0 1px 3px rgba(0,0,0,.08)}}
 body{background:var(--bg);color:var(--ink);
   font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   -webkit-font-smoothing:antialiased}
@@ -39,8 +40,15 @@ h1 .dot{width:9px;height:9px;border-radius:50%}
 nav{position:sticky;top:0;z-index:10;background:var(--bg);
   padding:12px 20px;max-width:900px;margin:0 auto;display:flex;gap:6px;overflow-x:auto}
 nav button{flex:0 0 auto;background:transparent;border:1px solid var(--line);color:var(--dim);
-  padding:8px 15px;border-radius:999px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
-nav button.on{background:var(--accent);border-color:var(--accent);color:#0d1017}
+  padding:8px 15px;border-radius:999px;font-size:14px;font-weight:500;cursor:pointer;
+  white-space:nowrap;transition:border-color .12s,color .12s,background .12s}
+nav button:hover:not(.on){border-color:var(--cyan);color:var(--cyan)}
+nav button.on{background:var(--cyan);border-color:var(--cyan);color:var(--bg)}
+/* Data Status carries its own health colour, overriding the cyan nav colour. */
+nav button.statusok{border-color:var(--accent);color:var(--accent)}
+nav button.statusok.on{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+nav button.statusbad{border-color:var(--red);color:var(--red)}
+nav button.statusbad.on{background:var(--red);border-color:var(--red);color:var(--bg)}
 .tfbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 .tfbar button{background:transparent;border:1px solid var(--line);color:var(--dim);
   padding:5px 13px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer}
@@ -226,6 +234,9 @@ function _applyStatus(st){
   const col=fresh?'var(--accent)':'var(--red)';
   ['navdot','statusdot'].forEach(function(id){
     const e=document.getElementById(id); if(e) e.style.background=col; });
+  const navbtn=document.getElementById('tab-datastatus');
+  if(navbtn){ navbtn.classList.toggle('statusok',fresh);
+    navbtn.classList.toggle('statusbad',!fresh); }
   const t=document.getElementById('statustext'), sub=document.getElementById('statussub');
   if(t){ t.textContent=age==null?'No pull recorded yet':(fresh?'Data is current':'Data is stale');
     t.style.color=col; }
@@ -921,6 +932,8 @@ def _data_status_tab(b: dict) -> str:
 def render(b: dict) -> str:
     status = b["overview"]["recovery"]["status"]
     dot = {"green": "var(--accent)", "amber": "var(--amber)", "red": "var(--red)"}.get(status, "var(--dim)")
+    # Colour the Data Status tab from the build; the tab's JS keeps it live.
+    ds_class = "statusok" if b.get("data_status", {}).get("fresh") else "statusbad"
     return (
         f"<style>{CSS}</style>"
         f'<header><h1><span class="dot" style="background:{dot}"></span>Rapha</h1>'
@@ -932,8 +945,8 @@ def render(b: dict) -> str:
         '<button onclick="tab(\'meals\',this)">Meals</button>'
         '<button onclick="tab(\'performance\',this)">Performance</button>'
         '<button onclick="tab(\'progress\',this)">Progress</button>'
-        '<button onclick="tab(\'datastatus\',this)">'
-        '<span class="dot" id="navdot" style="background:var(--dim)"></span>'
+        f'<button id="tab-datastatus" class="{ds_class}" onclick="tab(\'datastatus\',this)">'
+        '<span class="dot" id="navdot" style="background:currentColor"></span>'
         'Data Status</button>'
         '</nav><main>'
         + _today_tab(b)

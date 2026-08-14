@@ -44,3 +44,18 @@ def test_it_renders_without_a_data_status_section():
     # A briefing with no data_status must still produce a tab, not raise.
     html = portal._data_status_tab({})
     assert 'id="datastatus"' in html
+
+
+def test_tab_navigation_colour_is_cyan_not_green():
+    css = portal.CSS
+    assert "--cyan:" in css
+    # hover and the active tab both use cyan now
+    assert "nav button:hover:not(.on)" in css
+    assert "nav button.on{background:var(--cyan)" in css
+
+
+def test_data_status_tab_has_its_own_health_colours():
+    css = portal.CSS
+    # green when ok, red when there's a problem — overriding the cyan nav colour
+    assert "nav button.statusok" in css and "var(--accent)" in css
+    assert "nav button.statusbad" in css and "var(--red)" in css
