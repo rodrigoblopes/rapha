@@ -15,13 +15,16 @@ Security properties, all deliberate:
   localhost services: a malicious page in your browser can otherwise reach them.
 - Emits no CORS headers, so a cross-origin page cannot read a response even if it
   manages to send a request.
-- **Two mutating endpoints, both offline and credential-free:** ``POST /upload/photo``
-  (ADR-010) saves a progress photo (HEIC/JPG/PNG) under ``%RAPHA_HOME%``;
-  ``POST /measurement`` (ADR-011) upserts a manual body measurement into SQLite. Both
-  refuse cross-origin POSTs (``Sec-Fetch-Site`` + ``Origin`` checks), size-cap the body
-  before reading it, validate their input, re-render, and touch no bank, no watch and
-  no token. Nothing else mutates — no endpoint moves money, edits a Garmin record, or
+- **Mutating endpoints, all offline and credential-free**, each refusing cross-origin
+  POSTs (``Sec-Fetch-Site`` + ``Origin`` checks): ``POST /upload/photo`` (ADR-010)
+  saves a progress photo under ``%RAPHA_HOME%``; ``POST /measurement`` (ADR-011)
+  upserts a manual body measurement into SQLite; ``POST /launch-chrome`` (ADR-012)
+  opens a debug-enabled Chrome on Garmin's *login* page — a fixed command with no
+  request input, so no injection surface, and it holds no credential (the user logs
+  in; the pull only attaches). None of them moves money, edits a Garmin record, or
   writes outside ``%RAPHA_HOME%``.
+- ``GET /pull-status`` is read-only: pull freshness (a timestamp file) plus whether
+  the debug Chrome is reachable (a local TCP probe). It never touches Garmin.
 """
 
 from __future__ import annotations
@@ -66,7 +69,24 @@ class PortalHandler(SimpleHTTPRequestHandler):
             # 127.0.0.1 and then talks to this server with their Host header.
             self.send_error(403, "Host not allowed")
             return
+        if self.path == "/pull-status":
+            self._pull_status()
+            return
         super().do_GET()
+
+    def _pull_status(self) -> None:
+        """Live pull freshness + debug-Chrome reachability, for the Data Status tab.
+
+        Read-only and credential-free — it reads a timestamp file and probes a local
+        port; it never touches Garmin.
+        """
+        from .pull_status import pull_status
+
+        cfg = getattr(self.server, "rapha_cfg", None)
+        if cfg is None:  # pragma: no cover - serve() always sets it
+            self._json(500, {"ok": False, "error": "server misconfigured"})
+            return
+        self._json(200, pull_status(cfg.home))
 
     def do_HEAD(self) -> None:
         if not self._host_is_allowed():
@@ -114,6 +134,8 @@ class PortalHandler(SimpleHTTPRequestHandler):
             self._handle_photo_upload()
         elif self.path == "/measurement":
             self._handle_measurement()
+        elif self.path == "/launch-chrome":
+            self._handle_launch_chrome()
         else:
             self.send_error(404, "no such endpoint")
 
@@ -194,6 +216,38 @@ class PortalHandler(SimpleHTTPRequestHandler):
         rendered = self._rerender(cfg)
         _log(f"recorded measurement for {m.on}")
         self._json(200, {"ok": True, "date": m.on.isoformat(), "rendered": rendered})
+
+    def _handle_launch_chrome(self) -> None:
+        """Open a debug-enabled Chrome on Garmin's sign-in page (ADR-012).
+
+        The command is **fixed** — no request input flows into it — so there is no
+        injection surface; the worst a (same-origin-only) trigger can do is open a
+        browser window. It holds no credential: the user types the password into
+        Chrome, never into Rapha, and the pull only ever *attaches* to the session.
+        """
+        import subprocess
+
+        from .pull_status import find_chrome, launch_command
+
+        cfg = getattr(self.server, "rapha_cfg", None)
+        if cfg is None:  # pragma: no cover - serve() always sets it
+            self._json(500, {"ok": False, "error": "server misconfigured"})
+            return
+        chrome = find_chrome()
+        if not chrome:
+            self._json(404, {"ok": False,
+                             "error": "Chrome not found in the usual locations"})
+            return
+        profile = str(cfg.home / "chrome-debug")
+        try:
+            subprocess.Popen(launch_command(chrome, profile), close_fds=True)
+        except OSError as e:
+            self._json(500, {"ok": False, "error": f"could not launch Chrome: {e}"})
+            return
+        _log("launched debug Chrome on the Garmin sign-in page")
+        self._json(200, {"ok": True,
+                         "message": "Chrome is opening on the Garmin sign-in page — "
+                                    "log in, then the hourly pull can attach."})
 
     def end_headers(self) -> None:
         # No CORS. No caching of a page that changes every rebuild.

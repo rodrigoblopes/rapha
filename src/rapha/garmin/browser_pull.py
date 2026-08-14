@@ -167,7 +167,12 @@ def pull(cfg, *, activity_days: int = 365, metric_days: int = 45, verbose: bool 
             "wend": today.isoformat(),
         })
 
-    return _ingest(cfg, activities_raw, bundle, activity_days, say)
+    summary = _ingest(cfg, activities_raw, bundle, activity_days, say)
+    # Stamp the successful pull so the Data Status tab can age it.
+    from ..pull_status import record_pull
+
+    record_pull(cfg.home, summary)
+    return summary
 
 
 def _ingest(cfg, activities_raw, bundle, activity_days, say) -> dict:

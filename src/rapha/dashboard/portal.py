@@ -212,6 +212,51 @@ function closeLightbox(){
   const lb=document.getElementById('lightbox'); if(lb) lb.classList.remove('on');
 }
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeLightbox(); });
+function _fmtAge(sec){
+  if(sec==null) return 'never';
+  if(sec<60) return sec+'s ago';
+  if(sec<3600) return Math.floor(sec/60)+' min ago';
+  if(sec<86400){ const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60);
+    return h+'h'+(m?' '+m+'m':'')+' ago'; }
+  return Math.floor(sec/86400)+'d ago';
+}
+function _applyStatus(st){
+  const freshMin=st.fresh_minutes||60, age=st.age_seconds;
+  const fresh=(age!=null)&&(age<freshMin*60);
+  const col=fresh?'var(--accent)':'var(--red)';
+  ['navdot','statusdot'].forEach(function(id){
+    const e=document.getElementById(id); if(e) e.style.background=col; });
+  const t=document.getElementById('statustext'), sub=document.getElementById('statussub');
+  if(t){ t.textContent=age==null?'No pull recorded yet':(fresh?'Data is current':'Data is stale');
+    t.style.color=col; }
+  if(sub){ sub.textContent=age==null
+    ?'Open the browser session below and the hourly pull will start filling this in.'
+    :(fresh?('Last pull was within '+freshMin+' minutes.')
+           :('Last pull was over '+freshMin+' minutes ago — a refresh is due.')); }
+  const lp=document.getElementById('lastpull');
+  if(lp) lp.textContent=st.last_pull_at?st.last_pull_at.replace('T',' '):'\\u2014';
+  const pa=document.getElementById('pullage'); if(pa) pa.textContent=_fmtAge(age);
+  const cs=document.getElementById('chromestate');
+  if(cs&&st.chrome_up!=null){ cs.innerHTML=st.chrome_up
+    ?'<span style="color:var(--accent)">\\u25cf</span> A Garmin browser session is open \\u2014 a pull can run.'
+    :'<span style="color:var(--red)">\\u25cf</span> No browser session detected. Open one below so pulls can run.'; }
+}
+async function refreshStatus(){
+  try{ const r=await fetch('/pull-status',{cache:'no-store'});
+    if(r.ok){ _applyStatus(await r.json()); return; } }catch(e){}
+  if(window.DATA_STATUS) _applyStatus(window.DATA_STATUS);
+}
+async function launchChrome(btn){
+  const st=document.getElementById('launchstatus'); st.textContent='Opening Chrome\\u2026';
+  try{ const r=await fetch('/launch-chrome',{method:'POST'});
+    const j=await r.json().catch(function(){return {};});
+    st.textContent=(r.ok&&j.ok)?(j.message||'Chrome opening\\u2026')
+      :('Failed: '+((j&&j.error)||('HTTP '+r.status))); }
+  catch(e){ st.textContent='Error: '+e+' (is the portal served by rapha serve?)'; }
+  setTimeout(refreshStatus,3000);
+}
+window.addEventListener('DOMContentLoaded',function(){ refreshStatus();
+  setInterval(refreshStatus,60000); });
 window.addEventListener('DOMContentLoaded',function(){
   _drawIntraday();
   const b=document.querySelector('#perfbar button.def'); if(b) b.click();
@@ -778,6 +823,73 @@ def _progress_tab(b: dict) -> str:
 </div>"""
 
 
+def _data_status_tab(b: dict) -> str:
+    import json as _json
+
+    ds = b.get("data_status", {})
+    s = ds.get("summary") or {}
+    # Initial dot from the build; JS makes it live against the clock + a port probe.
+    fresh = ds.get("fresh")
+    init_col = "var(--accent)" if fresh else "var(--red)"
+    summary_html = ""
+    if s:
+        bits = [
+            (s.get("activities"), "activities"),
+            (s.get("days"), "days of metrics"),
+            (s.get("weigh_ins"), "weigh-ins"),
+            (s.get("exercise_set_rows"), "exercise sets"),
+        ]
+        summary_html = " · ".join(f"{v} {label}" for v, label in bits if v is not None)
+
+    return f"""
+<div class="tab" id="datastatus">
+  <script>window.DATA_STATUS={_json.dumps(ds)};</script>
+  <div class="card">
+    <h2><span class="dot" id="statusdot" style="background:{init_col}"></span>
+      Data status</h2>
+    <div class="big" id="statustext" style="margin-top:4px">checking…</div>
+    <div class="note" id="statussub"></div>
+  </div>
+
+  <div class="card">
+    <h2>Last Garmin pull</h2>
+    <div class="row">
+      {_stat('<span id="lastpull">—</span>', "When")}
+      {_stat('<span id="pullage">—</span>', "Age")}
+    </div>
+    {f'<div class="note">Last pull brought in: {_e(summary_html)}</div>' if summary_html else ''}
+    <div class="note">The dot turns <span style="color:var(--red)">red</span> once a pull
+      is more than {ds.get("fresh_minutes", 60)} minutes old, and
+      <span style="color:var(--accent)">green</span> while it's fresh.</div>
+  </div>
+
+  <div class="card">
+    <h2>Browser session</h2>
+    <div class="note" id="chromestate">checking whether a Garmin browser session is open…</div>
+    <button class="copy" style="margin-top:10px" onclick="launchChrome(this)">
+      Open Chrome on the Garmin login page</button>
+    <span class="note" id="launchstatus" style="margin-left:10px"></span>
+    <div class="note" style="margin-top:10px">The pull can only run while a Chrome you've
+      logged into Garmin is open. Click the button, sign in (do the human bits — password,
+      any check), then leave that window open. Rapha only ever <em>attaches</em> to it — it
+      never sees your password, and stores no credential.</div>
+  </div>
+
+  <div class="card">
+    <h2>How refresh works</h2>
+    <ul class="note" style="padding-left:18px;line-height:1.8">
+      <li>An hourly task runs <code>rapha pull</code> and rebuilds this portal.</li>
+      <li>A pull succeeds only if the browser session above is open and still logged in
+          — otherwise the dot goes red, your cue to click the button and sign in again.</li>
+      <li>Garmin sign-ins last a while, so in practice you re-authenticate occasionally,
+          not hourly.</li>
+      <li>Uploads and measurements you enter here are saved instantly and don't depend
+          on the pull.</li>
+    </ul>
+  </div>
+</div>"""
+
+
 def render(b: dict) -> str:
     status = b["overview"]["recovery"]["status"]
     dot = {"green": "var(--accent)", "amber": "var(--amber)", "red": "var(--red)"}.get(status, "var(--dim)")
@@ -792,12 +904,16 @@ def render(b: dict) -> str:
         '<button onclick="tab(\'meals\',this)">Meals</button>'
         '<button onclick="tab(\'performance\',this)">Performance</button>'
         '<button onclick="tab(\'progress\',this)">Progress</button>'
+        '<button onclick="tab(\'datastatus\',this)">'
+        '<span class="dot" id="navdot" style="background:var(--dim)"></span>'
+        'Data Status</button>'
         '</nav><main>'
         + _today_tab(b)
         + _training_tab(b)
         + _meals_tab(b)
         + _performance_tab(b)
         + _progress_tab(b)
+        + _data_status_tab(b)
         + '<div class="disclaimer">Observations against Projeto 60 Dias and published '
           'nutrition science — not medical advice. Every decision is yours.</div>'
         '</main>'

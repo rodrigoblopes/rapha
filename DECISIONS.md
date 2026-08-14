@@ -376,3 +376,53 @@ open time — SQLite has no `ADD COLUMN IF NOT EXISTS`.
 **Schema migration on the existing DB.** Old databases gain the new columns automatically on next
 open; the legacy `state.json` measurement is seeded into the table once, after which the table is
 the single source and `state.json` keeps only protocol config.
+
+---
+
+## ADR-012 — Data Status: pull freshness, a live health dot, and a Chrome-launch button
+
+**Date:** 2026-08-14
+
+The CDP pull (ADR-008) only runs while a human-authenticated Chrome is open on the debug port, and
+pulls are driven by an hourly scheduled task. That makes "is my data current, and if not why" a
+real question the user needs answered at a glance. The Data Status tab answers it.
+
+**Decision:** a new tab with a traffic-light dot (also mirrored beside the nav item). Green while a
+pull landed within the last hour, red once it is older or never happened. The freshness is honest
+because every successful pull stamps `data/cache/last_pull.json` (`pull_status.record_pull`), and
+the age is computed against the clock — client-side and re-checked each minute, so the dot goes red
+on its own as time passes without a page reload.
+
+**Two new server routes, both credential-free:**
+
+- `GET /pull-status` (read-only) returns the last-pull time, its age, whether it is fresh, the last
+  pull's summary counts, and — via a cheap local TCP probe — whether the debug Chrome is reachable
+  right now. The tab's JS polls it; the build embeds a first-paint snapshot (no port probe at build
+  time, to keep rendering side-effect-free) so the tab still works opened from disk.
+- `POST /launch-chrome` (ADR-012's mutation) opens a debug-enabled Chrome on Garmin's **sign-in**
+  page with a dedicated profile. This is the first time the server spawns a process, so the bounds
+  matter: the command is **fixed** — no request input reaches it, so there is no injection surface —
+  it is refused cross-origin like every other POST, and the worst a same-origin trigger can do is
+  open a browser window. It holds no credential: the user types the password into Chrome, and the
+  pull only ever *attaches*. A plain Chrome (unlike a Playwright-launched one) sets no automation
+  flags, so Cloudflare treats the human who logs in there as human.
+
+**The hourly loop.** Two scheduled tasks, registered under the logged-on user (no stored password):
+"Rapha Pull" runs `rapha-refresh.ps1` every hour (pull, then rebuild the portal, then log the
+outcome), and "Rapha Portal" serves the portal at logon so it always comes back on current code —
+fixing the stale-server class of bug directly. The refresh script uses `Start-Process -Wait` for
+`pythonw`: PowerShell does not wait on a GUI-subsystem executable with the call operator, so the
+naive version fired pull and report simultaneously and never captured the exit code.
+
+**Why hourly still means occasional re-auth.** A pull fails cleanly when the browser session is
+closed or expired — it exits non-zero, the marker is not restamped, and the dot goes red. Garmin
+sign-ins last a while, so in practice the user re-authenticates every so often (one click on the
+launch button), not hourly. `--metric-days 45` on the scheduled pull keeps the rich recent window
+intact: the daily ingest window-replaces its whole span, so a short window would quietly shrink the
+history the Performance charts draw.
+
+**Rejected:** launching Chrome from the page via `window.open` (opens in whatever browser is viewing
+the portal, which has no debug port, so the pull could not attach); a fully headless login with a
+stored password (ADR-007's rate-limit wall, and it reverses ADR-001's no-password invariant); and
+computing freshness only at build time (the dot would lie the moment an hour passed with the page
+open).

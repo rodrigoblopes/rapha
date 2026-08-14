@@ -174,8 +174,20 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     briefing["performance"] = _performance(days, acts, today, cfg.home)
     briefing["progression"] = _progression(cfg)
     briefing["progress"] = _progress(days, st, cfg, today, weight_hist, measurements)
+    briefing["data_status"] = _data_status(cfg)
     briefing["coach"] = _coach(briefing, today)
     return briefing
+
+
+def _data_status(cfg) -> dict:
+    """Pull freshness for the Data Status tab's first paint.
+
+    The build stays fast and side-effect-free, so it does not probe the debug port
+    here — the live ``GET /pull-status`` endpoint does that, and the tab's JS polls it.
+    """
+    from ..pull_status import pull_status
+
+    return pull_status(cfg.home, check_chrome=False)
 
 
 def _coach(b: dict, today: date) -> dict:

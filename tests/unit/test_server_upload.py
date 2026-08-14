@@ -197,6 +197,52 @@ class TestMeasurementEndpoint:
         assert rec.error[0] == 403
 
 
+class TestLaunchChrome:
+    def test_it_launches_a_fixed_command_and_reports_ok(self, tmp_path, monkeypatch):
+        cfg = SimpleNamespace(home=tmp_path)
+        calls = {}
+
+        import subprocess
+        monkeypatch.setattr("rapha.pull_status.find_chrome", lambda: r"C:\chrome.exe")
+        monkeypatch.setattr(subprocess, "Popen",
+                            lambda cmd, **kw: calls.setdefault("cmd", cmd))
+
+        h, rec = _handler(_same_origin(), cfg=cfg)
+        h.path = "/launch-chrome"
+        h.do_POST()
+
+        assert rec.json[0] == 200 and rec.json[1]["ok"] is True
+        assert calls["cmd"][0] == r"C:\chrome.exe"
+        assert "--remote-debugging-port=9222" in calls["cmd"]
+
+    def test_missing_chrome_is_404(self, tmp_path, monkeypatch):
+        cfg = SimpleNamespace(home=tmp_path)
+        monkeypatch.setattr("rapha.pull_status.find_chrome", lambda: None)
+        h, rec = _handler(_same_origin(), cfg=cfg)
+        h.path = "/launch-chrome"
+        h.do_POST()
+        assert rec.json[0] == 404
+
+    def test_a_cross_origin_launch_is_refused(self):
+        h, rec = _handler(_same_origin({"Sec-Fetch-Site": "cross-site"}))
+        h.path = "/launch-chrome"
+        h.do_POST()
+        assert rec.error[0] == 403
+
+
+class TestPullStatusEndpoint:
+    def test_it_serves_the_status_json(self, tmp_path):
+        from rapha import pull_status as ps
+        ps.record_pull(tmp_path, {"days": 45})
+        cfg = SimpleNamespace(home=tmp_path)
+        h, rec = _handler(_same_origin(), cfg=cfg)
+        h.path = "/pull-status"
+        h.do_GET()
+        assert rec.json[0] == 200
+        assert rec.json[1]["summary"] == {"days": 45}
+        assert "fresh" in rec.json[1]
+
+
 def test_the_upload_path_never_imports_a_garmin_token_holder():
     """ADR-001 still holds with a mutating endpoint present.
 
