@@ -879,8 +879,8 @@ def _data_status_tab(b: dict) -> str:
   <div class="card">
     <h2>Last Garmin pull</h2>
     <div class="row">
-      {_stat('<span id="lastpull">—</span>', "When")}
-      {_stat('<span id="pullage">—</span>', "Age")}
+      <div class="stat"><div class="n" id="lastpull">—</div><div class="l">When</div></div>
+      <div class="stat"><div class="n" id="pullage">—</div><div class="l">Age</div></div>
     </div>
     {f'<div class="note">Last pull brought in: {_e(summary_html)}</div>' if summary_html else ''}
     <button class="copy" style="margin-top:10px" onclick="forcePull(this)">Pull now</button>
