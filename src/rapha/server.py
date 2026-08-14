@@ -19,10 +19,11 @@ Security properties, all deliberate:
   POSTs (``Sec-Fetch-Site`` + ``Origin`` checks): ``POST /upload/photo`` (ADR-010)
   saves a progress photo under ``%RAPHA_HOME%``; ``POST /measurement`` (ADR-011)
   upserts a manual body measurement into SQLite; ``POST /launch-chrome`` (ADR-012)
-  opens a debug-enabled Chrome on Garmin's *login* page — a fixed command with no
-  request input, so no injection surface, and it holds no credential (the user logs
-  in; the pull only attaches). None of them moves money, edits a Garmin record, or
-  writes outside ``%RAPHA_HOME%``.
+  opens a debug-enabled Chrome on Garmin's *login* page; ``POST /pull-now`` (ADR-012)
+  fires the hourly pull task on demand. The last two are fixed commands with no
+  request input (no injection surface) and hold no credential — the server asks the
+  OS to start a job or a browser; it never runs the pull or logs in itself. None of
+  them moves money, edits a Garmin record, or writes outside ``%RAPHA_HOME%``.
 - ``GET /pull-status`` is read-only: pull freshness (a timestamp file) plus whether
   the debug Chrome is reachable (a local TCP probe). It never touches Garmin.
 """
@@ -136,6 +137,8 @@ class PortalHandler(SimpleHTTPRequestHandler):
             self._handle_measurement()
         elif self.path == "/launch-chrome":
             self._handle_launch_chrome()
+        elif self.path == "/pull-now":
+            self._handle_pull_now()
         else:
             self.send_error(404, "no such endpoint")
 
@@ -248,6 +251,36 @@ class PortalHandler(SimpleHTTPRequestHandler):
         self._json(200, {"ok": True,
                          "message": "Chrome is opening on the Garmin sign-in page — "
                                     "log in, then the hourly pull can attach."})
+
+    def _handle_pull_now(self) -> None:
+        """Fire the hourly pull task on demand (ADR-012).
+
+        The server does not run the pull — it asks the OS to start the registered
+        "Rapha Pull" task, which runs in its own process. So the credential-free
+        server never imports the pull path; the fixed command carries no request
+        input. The pull still needs the debug Chrome open, exactly as the hourly run.
+        """
+        import subprocess
+
+        from .pull_status import run_task_command
+
+        try:
+            result = subprocess.run(run_task_command(), capture_output=True,
+                                    text=True, timeout=15, check=False)
+        except (OSError, subprocess.SubprocessError) as e:
+            self._json(500, {"ok": False, "error": f"could not start the pull: {e}"})
+            return
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip() \
+                or f"schtasks exited {result.returncode}"
+            self._json(500, {"ok": False,
+                             "error": f"could not start the pull ({detail}) — is the "
+                                      "'Rapha Pull' task registered?"})
+            return
+        _log("triggered an on-demand pull")
+        self._json(200, {"ok": True,
+                         "message": "Pull started — it takes about a minute. It needs "
+                                    "the Garmin browser session open to succeed."})
 
     def end_headers(self) -> None:
         # No CORS. No caching of a page that changes every rebuild.

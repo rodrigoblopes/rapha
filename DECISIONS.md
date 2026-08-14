@@ -421,6 +421,8 @@ launch button), not hourly. `--metric-days 45` on the scheduled pull keeps the r
 intact: the daily ingest window-replaces its whole span, so a short window would quietly shrink the
 history the Performance charts draw.
 
+**On-demand pull.** A "Pull now" button fires the *same* hourly task immediately via `POST /pull-now` (the server runs `schtasks /run /tn "Rapha Pull"`, a fixed command). It deliberately does not run the pull inside the server — that would import the pull path into the credential-free listening process, breaking ADR-001. Triggering the registered task keeps the pull in its own process; the tab then watches `/pull-status` until the last-pull timestamp advances and reports completion. Like the hourly run, it needs the debug Chrome open.
+
 **Rejected:** launching Chrome from the page via `window.open` (opens in whatever browser is viewing
 the portal, which has no debug port, so the pull could not attach); a fully headless login with a
 stored password (ADR-007's rate-limit wall, and it reverses ADR-001's no-password invariant); and

@@ -23,6 +23,18 @@ GARMIN_SIGNIN = "https://connect.garmin.com/signin"
 DEBUG_PORT = 9222
 #: A pull older than this reads as stale — the Data Status dot goes red.
 FRESH_MINUTES = 60
+#: The scheduled task the "Pull now" button fires — the same hourly job, on demand.
+PULL_TASK_NAME = "Rapha Pull"
+
+
+def run_task_command(task_name: str = PULL_TASK_NAME) -> list[str]:
+    """The fixed argv that triggers a scheduled task now (Windows ``schtasks``).
+
+    The button fires the *already-registered* hourly pull rather than running it in
+    the server, so the credential-free server (ADR-001) never imports the pull path —
+    it only asks the OS to start a job that lives in its own process.
+    """
+    return ["schtasks", "/run", "/tn", task_name]
 
 
 def _marker(home) -> Path:

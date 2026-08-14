@@ -230,6 +230,42 @@ class TestLaunchChrome:
         assert rec.error[0] == 403
 
 
+class TestPullNow:
+    def test_it_triggers_the_task_and_reports_ok(self, monkeypatch):
+        import subprocess
+        captured = {}
+
+        def fake_run(cmd, **kw):
+            captured["cmd"] = cmd
+            return SimpleNamespace(returncode=0, stdout="SUCCESS", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        h, rec = _handler(_same_origin())
+        h.path = "/pull-now"
+        h.do_POST()
+        assert rec.json[0] == 200 and rec.json[1]["ok"] is True
+        assert captured["cmd"] == ["schtasks", "/run", "/tn", "Rapha Pull"]
+
+    def test_a_missing_task_is_reported(self, monkeypatch):
+        import subprocess
+        monkeypatch.setattr(
+            subprocess, "run",
+            lambda cmd, **kw: SimpleNamespace(returncode=1, stdout="",
+                                              stderr="ERROR: task not found"),
+        )
+        h, rec = _handler(_same_origin())
+        h.path = "/pull-now"
+        h.do_POST()
+        assert rec.json[0] == 500
+        assert "task not found" in rec.json[1]["error"]
+
+    def test_a_cross_origin_pull_is_refused(self):
+        h, rec = _handler(_same_origin({"Sec-Fetch-Site": "cross-site"}))
+        h.path = "/pull-now"
+        h.do_POST()
+        assert rec.error[0] == 403
+
+
 class TestPullStatusEndpoint:
     def test_it_serves_the_status_json(self, tmp_path):
         from rapha import pull_status as ps

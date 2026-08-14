@@ -59,6 +59,11 @@ def test_launch_command_is_fixed_and_debuggable(tmp_path):
     assert cmd[-1] == pull_status.GARMIN_SIGNIN  # lands on the login page
 
 
+def test_run_task_command_is_fixed():
+    cmd = pull_status.run_task_command()
+    assert cmd == ["schtasks", "/run", "/tn", "Rapha Pull"]
+
+
 def test_chrome_up_is_false_on_a_dead_port():
     # Nothing listens on this port in the test environment.
     assert pull_status.chrome_debug_up(port=59999, timeout=0.2) is False

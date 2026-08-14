@@ -233,6 +233,7 @@ function _applyStatus(st){
     ?'Open the browser session below and the hourly pull will start filling this in.'
     :(fresh?('Last pull was within '+freshMin+' minutes.')
            :('Last pull was over '+freshMin+' minutes ago — a refresh is due.')); }
+  window.__lastPullAt=st.last_pull_at||null;
   const lp=document.getElementById('lastpull');
   if(lp) lp.textContent=st.last_pull_at?st.last_pull_at.replace('T',' '):'\\u2014';
   const pa=document.getElementById('pullage'); if(pa) pa.textContent=_fmtAge(age);
@@ -245,6 +246,30 @@ async function refreshStatus(){
   try{ const r=await fetch('/pull-status',{cache:'no-store'});
     if(r.ok){ _applyStatus(await r.json()); return; } }catch(e){}
   if(window.DATA_STATUS) _applyStatus(window.DATA_STATUS);
+}
+async function forcePull(btn){
+  const st=document.getElementById('pullnowstatus');
+  const before=window.__lastPullAt||null;
+  btn.disabled=true; st.textContent='Starting pull\\u2026';
+  try{
+    const r=await fetch('/pull-now',{method:'POST'});
+    const j=await r.json().catch(function(){return {};});
+    if(!(r.ok&&j.ok)){ st.textContent='Failed: '+((j&&j.error)||('HTTP '+r.status));
+      btn.disabled=false; return; }
+  }catch(e){ st.textContent='Error: '+e+' (is the portal served by rapha serve?)';
+    btn.disabled=false; return; }
+  st.textContent='Pull running\\u2026 (about a minute)';
+  let tries=0;
+  const iv=setInterval(async function(){
+    tries++;
+    try{ const r=await fetch('/pull-status',{cache:'no-store'});
+      if(r.ok){ const s=await r.json(); _applyStatus(s);
+        if(s.last_pull_at && s.last_pull_at!==before){ clearInterval(iv);
+          btn.disabled=false; st.textContent='Pull complete \\u2713'; return; } } }catch(e){}
+    if(tries>=30){ clearInterval(iv); btn.disabled=false;
+      st.textContent='Still running, or it failed — if the dot stays red, open the '
+        +'Garmin browser session below and try again.'; }
+  },4000);
 }
 async function launchChrome(btn){
   const st=document.getElementById('launchstatus'); st.textContent='Opening Chrome\\u2026';
@@ -858,9 +883,12 @@ def _data_status_tab(b: dict) -> str:
       {_stat('<span id="pullage">—</span>', "Age")}
     </div>
     {f'<div class="note">Last pull brought in: {_e(summary_html)}</div>' if summary_html else ''}
+    <button class="copy" style="margin-top:10px" onclick="forcePull(this)">Pull now</button>
+    <span class="note" id="pullnowstatus" style="margin-left:10px"></span>
     <div class="note">The dot turns <span style="color:var(--red)">red</span> once a pull
       is more than {ds.get("fresh_minutes", 60)} minutes old, and
-      <span style="color:var(--accent)">green</span> while it's fresh.</div>
+      <span style="color:var(--accent)">green</span> while it's fresh. "Pull now" runs
+      the same job immediately — it needs the browser session below to be open.</div>
   </div>
 
   <div class="card">
