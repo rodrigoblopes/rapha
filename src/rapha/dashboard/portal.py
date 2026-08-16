@@ -420,6 +420,23 @@ def _today_tab(b: dict) -> str:
       Every call is yours.</div>
   </div>""" if coach_paras else "")
 
+    sw = ov.get("sheet_switch")
+    switch_banner = ""
+    if sw and sw.get("days_until") is not None and sw["days_until"] <= 10:
+        d = sw["days_until"]
+        when = ("today" if d <= 0 else "tomorrow" if d == 1 else f"in {d} days")
+        switch_banner = (
+            '<div class="card" style="border-left:3px solid var(--cyan)">'
+            '<h2>Programme update</h2>'
+            f'<div>Your training sheet advances to <strong>Sheet {_e(sw["sheet"])}</strong> '
+            f'{when} — week {_e(sw["starts_week"])}, {_e(sw["starts_on"])}. The portal '
+            'switches automatically; the new workouts are being set up in Garmin.</div></div>')
+
+    sheet_line = ""
+    if ov.get("sheet_number") and ov.get("week"):
+        sheet_line = (f'<div class="note">Sheet {_e(ov["sheet_number"])} · '
+                      f'week {_e(ov["week"])} of 8</div>')
+
     return f"""
 <div class="tab on" id="today">
   <div class="card">
@@ -427,11 +444,13 @@ def _today_tab(b: dict) -> str:
     <div class="pill {rec['status']}">{_recovery_emoji(rec['status'])} {_e(rec['headline'])}</div>
     <div style="margin-top:14px">{sig_rows}</div>
   </div>
+  {switch_banner}
   {coach_card}
   <div class="row">
     <div class="card" style="flex:1;min-width:240px">
       <h2>Train</h2>
       <div>{train_line}</div>
+      {sheet_line}
       <div class="note">{_e(tr.get("progression","")[:150])}{'…' if tr.get('progression') else ''}</div>
     </div>
     <div class="card" style="flex:1;min-width:240px">

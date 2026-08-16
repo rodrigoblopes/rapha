@@ -283,10 +283,14 @@ def _recent_weight(days) -> Grams | None:
 def _overview(days, acts, programmes, st, today) -> dict:
     recovery = assess_recovery(days, today=today)
     start = date.fromisoformat(st["protocol_start"]) if st.get("protocol_start") else today
-    sheet = _live_sheet(programmes, st)
+    sheet = _live_sheet(programmes, st, today)
     pos = cycle.resolve(sheet, start=start, today=today) if sheet else None
     return {
         "day_of_60": (today - start).days + 1,
+        "week": _protocol_week(st, today),
+        "sheet": sheet.get("source_file", "") if sheet else "",
+        "sheet_number": sheet.get("sheet_number") if sheet else None,
+        "sheet_switch": _sheet_switch(programmes, st, today),
         "focus": (pos.note if pos and not pos.is_rest else "Rest day") if pos else "—",
         "is_rest": bool(pos and pos.is_rest),
         "recovery": {
@@ -302,19 +306,91 @@ def _overview(days, acts, programmes, st, today) -> dict:
     }
 
 
-def _live_sheet(programmes, st) -> dict | None:
+def _sheet_weeks(weeks_field) -> set[int]:
+    """The protocol weeks a sheet covers, from its `weeks` label.
+
+    Cariani's Intermediário sheets state their weeks explicitly — "1ª,2ª,3ª E 4ª
+    SEMANAS" -> {1,2,3,4}, "5ª,6ª,7ª E 8ª SEMANAS" -> {5,6,7,8} — so the number that
+    matters is just the digits in the label.
+    """
+    import re
+
+    return {int(n) for n in re.findall(r"\d+", weeks_field or "")}
+
+
+def _protocol_week(st, today) -> int | None:
+    start = st.get("protocol_start")
+    if not start:
+        return None
+    return max(1, (today - date.fromisoformat(start)).days // 7 + 1)
+
+
+def _live_sheet(programmes, st, today=None) -> dict | None:
+    """The sheet for *this* week of the protocol, not just the first one on file.
+
+    Sheet 01 runs weeks 1–4, Sheet 02 weeks 5–8; the app used to always serve the
+    first, so it never advanced you. Now it picks the sheet whose week-range covers
+    the current protocol week (falling back to the latest sheet that has already
+    started, then to the first sheet, then to any sheet with sessions).
+    """
+    today = today or date.today()
     level = st.get("level", "INTERMEDIÁRIO")
-    for p in programmes:
-        if level.split()[0][:6].upper() in p["level"].upper() and p["sessions"]:
-            return p
-    return next((p for p in programmes if p["sessions"]), None)
+    key = level.split()[0][:6].upper()
+    matching = [p for p in programmes if key in p["level"].upper() and p.get("sessions")]
+    if not matching:
+        return next((p for p in programmes if p.get("sessions")), None)
+
+    week = _protocol_week(st, today)
+    if week is not None:
+        for p in matching:  # a sheet whose range contains this week (list order wins)
+            if week in _sheet_weeks(p.get("weeks", "")):
+                return p
+        started = [(max(_sheet_weeks(p.get("weeks", "")), default=0), p) for p in matching]
+        started = [(mx, p) for mx, p in started if 0 < mx <= week]
+        if started:  # else the most-recent sheet that has already begun
+            return max(started, key=lambda t: t[0])[1]
+    return matching[0]
+
+
+def _sheet_switch(programmes, st, today) -> dict | None:
+    """When the *next* sheet begins, for an early heads-up. None if no switch ahead."""
+    week = _protocol_week(st, today)
+    current = _live_sheet(programmes, st, today)
+    if week is None or current is None:
+        return None
+    start = date.fromisoformat(st["protocol_start"])
+    key = st.get("level", "INTERMEDIÁRIO").split()[0][:6].upper()
+    matching = [p for p in programmes if key in p["level"].upper() and p.get("sessions")]
+    cur_max = max(_sheet_weeks(current.get("weeks", "")), default=0)
+    # the next sheet whose first week is beyond the current sheet's last week
+    upcoming = None
+    for p in matching:
+        weeks = _sheet_weeks(p.get("weeks", ""))
+        first = min(weeks, default=0)
+        if first > cur_max and (
+            upcoming is None
+            or first < min(_sheet_weeks(upcoming.get("weeks", "")), default=99)
+        ):
+            upcoming = p
+    if not upcoming:
+        return None
+    next_first = min(_sheet_weeks(upcoming.get("weeks", "")))
+    switch_date = start + timedelta(days=(next_first - 1) * 7)
+    days_until = (switch_date - today).days
+    return {
+        "sheet": upcoming.get("sheet_number"),
+        "file": upcoming.get("source_file", ""),
+        "starts_week": next_first,
+        "starts_on": switch_date.isoformat(),
+        "days_until": days_until,
+    }
 
 
 def _training(programmes, st, today) -> dict:
     from ..garmin.workout import RepStrategy, build_workout
     from ..mapping.exercises import try_map
 
-    sheet = _live_sheet(programmes, st)
+    sheet = _live_sheet(programmes, st, today)
     start = date.fromisoformat(st["protocol_start"]) if st.get("protocol_start") else today
     if not sheet:
         return {"available": False}
