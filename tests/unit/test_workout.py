@@ -28,8 +28,8 @@ class TestExerciseMapping:
         # Regression: a bare "cadeira" fallback once shadowed "cadeira adutora",
         # mapping a hip adduction to a leg extension — the exact wrong-movement
         # failure this module exists to prevent. Longest key must win.
-        assert map_exercise("CADEIRA ADUTORA").category == "HIP_RAISE"
-        assert map_exercise("CADEIRA ABDUTORA").name == "HIP_ABDUCTION"
+        assert map_exercise("CADEIRA ADUTORA").name == "STANDING_ADDUCTION"
+        assert map_exercise("CADEIRA ABDUTORA").name == "STANDING_HIP_ABDUCTION"
         assert map_exercise("CADEIRA EXTENSORA").name == "LEG_EXTENSIONS"
 
     def test_prancha_abdominal_is_a_plank_not_a_crunch(self):

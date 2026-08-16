@@ -88,8 +88,13 @@ _TABLE: list[tuple[str, GarminExercise]] = [
     ("cadeira extensora", GarminExercise("LEG_CURL", "LEG_EXTENSIONS")),
     ("cadeira flexora", GarminExercise("LEG_CURL", "SEATED_LEG_CURL")),
     ("mesa flexora", GarminExercise("LEG_CURL", "LYING_LEG_CURL")),
-    ("cadeira adutora", GarminExercise("HIP_RAISE", "HIP_ADDUCTION")),
-    ("cadeira abdutora", GarminExercise("HIP_RAISE", "HIP_ABDUCTION")),
+    # The adductor/abductor machines are adduction/abduction, not a hip raise. Garmin
+    # keeps these names only under HIP_STABILITY (its taxonomy is asymmetric: adduction
+    # carries no "HIP", abduction does). HIP_RAISE would blank the name to "Hip Raise".
+    ("cadeira adutora", GarminExercise("HIP_STABILITY", "STANDING_ADDUCTION")),
+    ("cadeira abdutora", GarminExercise("HIP_STABILITY", "STANDING_HIP_ABDUCTION")),
+    ("adutora", GarminExercise("HIP_STABILITY", "STANDING_ADDUCTION")),
+    ("abdutora", GarminExercise("HIP_STABILITY", "STANDING_HIP_ABDUCTION")),
     ("elevacao pelvica", GarminExercise("HIP_RAISE", "BARBELL_HIP_THRUST")),
     ("panturrilha", GarminExercise("CALF_RAISE", "STANDING_CALF_RAISE")),
     ("passada", GarminExercise("LUNGE", "LUNGE")),
