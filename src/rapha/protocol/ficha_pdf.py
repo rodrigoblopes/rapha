@@ -174,8 +174,13 @@ def _looks_like_a_name(text: str | None) -> bool:
     stripped = text.strip()
     if not stripped or stripped.upper() in _COLUMN_HEADINGS:
         return False
-    letters = sum(c.isalpha() for c in stripped)
-    return letters >= 4 and not _looks_like_reps(stripped)
+    if _looks_like_reps(stripped):
+        return False
+    # A bare set-count line ("4 séries") is a prescription, not a name. It slips past
+    # the reps check (it has no per-set scheme), and in a merged first-exercise cell it
+    # would be picked as the name — dropping the real movement. Remove the set count;
+    # if almost no letters remain, the line was only ever the count.
+    return sum(c.isalpha() for c in _SET_COUNT.sub("", stripped)) >= 4
 
 
 def parse_exercise_row(

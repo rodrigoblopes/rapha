@@ -7,6 +7,7 @@ content is reproduced here — the repo holds parsers, not the material (ADR-002
 import pytest
 
 from rapha.protocol.ficha_pdf import (
+    _exercise_from_cells,
     parse_exercise_row,
     parse_header,
     parse_notes,
@@ -175,6 +176,25 @@ class TestSheetWideNotes:
 
         assert any("ENTRE AS SÉRIES" in n for n in notes)
         assert any("CARGA PROGRESSIVA" in n.upper() for n in notes)
+
+
+class TestMergedFirstExerciseCell:
+    """The first exercise of a day sometimes merges into one PDF cell:
+    ``"4 séries\\n<NAME>\\n1ª-15/2ª-15\\n3ª-12/4ª-12"``. The bare set-count line must
+    not win as the name — that once dropped the movement entirely."""
+
+    CELL = ("4 séries\nINVENTED MACHINE PRESS\n"
+            "1ª -15 rep/ 2ª -15 REP\n3ª -12 REP / 4ª - 12 REP")
+
+    def test_the_movement_name_is_kept_not_the_set_count(self):
+        ex = _exercise_from_cells([self.CELL, None, None, "1 MIN INTERVALO"])
+        assert ex is not None
+        assert "INVENTED MACHINE PRESS" in ex.name
+        assert "série" not in ex.name.lower()
+
+    def test_the_per_set_reps_survive_the_merge(self):
+        ex = _exercise_from_cells([self.CELL, None, None, "1 MIN INTERVALO"])
+        assert [s.reps for s in ex.sets] == [15, 15, 12, 12]
 
 
 class TestHeader:
