@@ -63,10 +63,16 @@ def _strip_exercise_names(payload: dict) -> dict:
     import copy
 
     clone = copy.deepcopy(payload)
-    for seg in clone.get("workoutSegments", []):
-        for step in seg.get("workoutSteps", []):
+
+    def walk(steps):
+        for step in steps:
             if "exerciseName" in step:
                 step["exerciseName"] = None
+            if step.get("type") == "RepeatGroupDTO":
+                walk(step.get("workoutSteps", []))
+
+    for seg in clone.get("workoutSegments", []):
+        walk(seg.get("workoutSteps", []))
     return clone
 
 

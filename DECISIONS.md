@@ -473,3 +473,13 @@ pushes only the four lifting sessions; the cardio day (Módulo 14) stays the use
 **Reversibility.** Workouts and their schedule entries are deletable, and `push(replace_prefix=…)`
 plus `delete_workout` make the whole operation undoable — which is what made it safe to run against
 the real account.
+
+**Workout structure — sets, reps, and rest (added later).** The first push emitted a flat list of
+identical steps with lap-button ends and no break after an exercise's last set. Corrected to use
+Garmin's native **repeat groups**: a run of same-rep sets (a pyramid 15,15,12,12 → two blocks, 2×15
+then 2×12) is one `RepeatGroupDTO`, and the rest step lives *inside* the iteration so a break
+follows every set — including the last, which is the gap before the next exercise. Two live-verified
+schema facts made this work: the reps end-condition is `conditionTypeId` **10** (`3` is *distance* —
+a latent bug in `workout.py` that never bit only because we had defaulted to lap-button), and a
+repeat is `stepTypeId` 6 with an `iterations` (`conditionTypeId` 7) end-condition. Garmin stores the
+rest step back as a `recovery` step — its term for rest in strength — which is expected.

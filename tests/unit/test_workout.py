@@ -56,6 +56,15 @@ SESSION = {
     ],
 }
 
+# A pyramid: two sets at 15, two at 12 — should collapse to two repeat groups.
+PYRAMID = {
+    "exercises": [{
+        "name": "Supino reto",
+        "sets": [{"reps": 15}, {"reps": 15}, {"reps": 12}, {"reps": 12}],
+        "rest": {"value": 90},
+    }]
+}
+
 
 class TestBuildWorkout:
     def test_the_payload_names_the_workout_and_is_strength(self):
@@ -63,31 +72,52 @@ class TestBuildWorkout:
         assert result.payload["workoutName"] == "Day 1 — Peito"
         assert result.payload["sportType"]["sportTypeKey"] == "strength_training"
 
-    def test_rest_steps_go_between_sets_but_not_after_the_last(self):
-        result = build_workout(SESSION, name="x", strategy=RepStrategy.TIME)
-        steps = result.payload["workoutSegments"][0]["workoutSteps"]
-        kinds = [s["stepType"]["stepTypeKey"] for s in steps]
-        # supino set1, rest, supino set2, (no rest), prancha
-        assert kinds == ["interval", "rest", "interval", "interval"]
+    def test_same_rep_sets_collapse_into_one_repeat_group_each(self):
+        steps = build_workout(PYRAMID, name="x").payload["workoutSegments"][0]["workoutSteps"]
+        # two blocks: 2x15 and 2x12
+        assert [s["type"] for s in steps] == ["RepeatGroupDTO", "RepeatGroupDTO"]
+        assert steps[0]["numberOfIterations"] == 2
+        assert steps[1]["numberOfIterations"] == 2
+        first_ex = steps[0]["workoutSteps"][0]
+        assert first_ex["endConditionValue"] == 15
+        assert steps[1]["workoutSteps"][0]["endConditionValue"] == 12
 
-    def test_time_strategy_uses_lap_button_for_reps_and_keeps_the_count_in_the_note(self):
+    def test_rest_is_inside_each_set_so_it_follows_every_set(self):
+        # A break after every set — including the last, giving a break before the
+        # next exercise (the gap the flat build was missing).
+        steps = build_workout(PYRAMID, name="x").payload["workoutSegments"][0]["workoutSteps"]
+        for block in steps:
+            kinds = [c["stepType"]["stepTypeKey"] for c in block["workoutSteps"]]
+            assert kinds == ["interval", "rest"]
+            assert block["workoutSteps"][1]["endConditionValue"] == 90
+
+    def test_reps_use_the_correct_reps_condition_not_distance(self):
+        result = build_workout(SESSION, name="x", strategy=RepStrategy.REPS)
+        first = result.payload["workoutSegments"][0]["workoutSteps"][0]
+        assert first["endCondition"]["conditionTypeKey"] == "reps"
+        assert first["endCondition"]["conditionTypeId"] == 10   # 3 is distance
+        assert first["endConditionValue"] == 12
+
+    def test_time_strategy_uses_lap_button_and_keeps_the_count_in_the_note(self):
         result = build_workout(SESSION, name="x", strategy=RepStrategy.TIME)
         first = result.payload["workoutSegments"][0]["workoutSteps"][0]
         assert first["endCondition"]["conditionTypeKey"] == "lap.button"
         assert "12 reps" in first["description"]
 
-    def test_reps_strategy_emits_a_reps_end_condition(self):
-        result = build_workout(SESSION, name="x", strategy=RepStrategy.REPS)
-        first = result.payload["workoutSegments"][0]["workoutSteps"][0]
-        assert first["endCondition"]["conditionTypeKey"] == "reps"
-        assert first["endConditionValue"] == 12
-
     def test_a_timed_hold_becomes_a_time_step_regardless_of_strategy(self):
         result = build_workout(SESSION, name="x", strategy=RepStrategy.REPS)
         steps = result.payload["workoutSegments"][0]["workoutSteps"]
-        plank = steps[-1]
+        plank = next(s for s in steps if s.get("category") == "PLANK")
         assert plank["endCondition"]["conditionTypeKey"] == "time"
         assert plank["endConditionValue"] == 60
+
+    def test_steporders_are_sequential_across_the_tree(self):
+        steps = build_workout(PYRAMID, name="x").payload["workoutSegments"][0]["workoutSteps"]
+        orders = []
+        for s in steps:
+            orders.append(s["stepOrder"])
+            orders += [c["stepOrder"] for c in s.get("workoutSteps", [])]
+        assert orders == sorted(orders) and orders[0] == 1 and len(set(orders)) == len(orders)
 
 
 class TestUnmappedIsReportedNotSubstituted:
@@ -102,7 +132,9 @@ class TestUnmappedIsReportedNotSubstituted:
         assert "Movimento Alienígena" in result.unmapped
         # The mapped one still made it; the unmapped one did not become something else.
         steps = result.payload["workoutSegments"][0]["workoutSteps"]
-        assert len(steps) == 1
+        intervals = [s for s in steps if s["stepType"]["stepTypeKey"] == "interval"]
+        assert len(intervals) == 1
+        assert intervals[0]["category"] == "BENCH_PRESS"
 
 
 class TestDescribe:

@@ -35,11 +35,18 @@ _STEP_TYPES = {
     "interval": {"stepTypeId": 3, "stepTypeKey": "interval"},
     "rest": {"stepTypeId": 4, "stepTypeKey": "rest"},
     "cooldown": {"stepTypeId": 5, "stepTypeKey": "cooldown"},
+    "repeat": {"stepTypeId": 6, "stepTypeKey": "repeat"},
 }
 
-_END_REPS = {"conditionTypeId": 3, "conditionTypeKey": "reps"}
+# Condition-type ids verified against Garmin's live API: 10 is reps (3 is DISTANCE —
+# a long-standing bug in this file that never bit because we defaulted to lap-button).
+_END_REPS = {"conditionTypeId": 10, "conditionTypeKey": "reps"}
 _END_TIME = {"conditionTypeId": 2, "conditionTypeKey": "time"}
 _END_LAP = {"conditionTypeId": 1, "conditionTypeKey": "lap.button"}
+_END_ITERATIONS = {"conditionTypeId": 7, "conditionTypeKey": "iterations"}
+
+#: A break between sets/exercises when the sheet does not state a rest.
+DEFAULT_REST_S = 60
 
 
 class RepStrategy(Enum):
@@ -58,64 +65,105 @@ class BuildResult:
     strategy: RepStrategy
 
 
-def _rep_step(order: int, category: str, name: str | None, reps: int, note: str,
-              strategy: RepStrategy) -> dict:
+def _exercise_step(category: str, name: str | None, kind: str, value: int, note: str,
+                   strategy: RepStrategy) -> dict:
+    """One working set as an executable step. ``kind`` is 'reps' or 'time'."""
     step = {
         "type": "ExecutableStepDTO",
-        "stepOrder": order,
+        "stepOrder": 0,  # renumbered at the end
         "stepType": _STEP_TYPES["interval"],
         "category": category,
         "exerciseName": name,
         "description": note,
     }
-    if strategy is RepStrategy.REPS:
+    if kind == "time":
+        step["endCondition"] = _END_TIME
+        step["endConditionValue"] = value
+    elif strategy is RepStrategy.REPS:
         step["endCondition"] = _END_REPS
-        step["endConditionValue"] = reps
+        step["endConditionValue"] = value
     else:
-        # Lap-button: the athlete ends the set. The rep target is in the note, so
-        # nothing is lost even though the watch does not count reps for us.
+        # Lap-button: the athlete ends the set; the rep target rides in the note.
         step["endCondition"] = _END_LAP
     return step
 
 
-def _time_step(order: int, category: str, name: str | None, seconds: int, note: str) -> dict:
+def _rest_step(seconds: int) -> dict:
     return {
         "type": "ExecutableStepDTO",
-        "stepOrder": order,
-        "stepType": _STEP_TYPES["interval"],
-        "category": category,
-        "exerciseName": name,
-        "endCondition": _END_TIME,
-        "endConditionValue": seconds,
-        "description": note,
-    }
-
-
-def _rest_step(order: int, seconds: int) -> dict:
-    return {
-        "type": "ExecutableStepDTO",
-        "stepOrder": order,
+        "stepOrder": 0,
         "stepType": _STEP_TYPES["rest"],
         "endCondition": _END_TIME,
         "endConditionValue": seconds,
     }
 
 
+def _repeat_group(iterations: int, children: list[dict]) -> dict:
+    return {
+        "type": "RepeatGroupDTO",
+        "stepOrder": 0,
+        "stepType": _STEP_TYPES["repeat"],
+        "numberOfIterations": iterations,
+        "smartRepeat": False,
+        "endCondition": _END_ITERATIONS,
+        "endConditionValue": iterations,
+        "workoutSteps": children,
+    }
+
+
+def _group_sets(sets: list[dict]) -> list[tuple[str, int, int]]:
+    """Collapse consecutive identical sets into (kind, value, count) runs.
+
+    A pyramid 15,15,12,12 becomes [('reps',15,2), ('reps',12,2)] — two set-blocks —
+    so each block is one Garmin repeat group. Varying reps that never repeat degrade
+    to blocks of one, which is honest (they simply are not grouped).
+    """
+    runs: list[list] = []
+    for s in sets:
+        if s.get("reps") is not None:
+            key = ("reps", s["reps"])
+        elif s.get("duration") is not None:
+            d = s["duration"]
+            key = ("time", d["value"] if isinstance(d, dict) else d)
+        else:
+            continue
+        if runs and runs[-1][0] == key:
+            runs[-1][1] += 1
+        else:
+            runs.append([key, 1])
+    return [(k[0], k[1], count) for k, count in runs]
+
+
+def _renumber(steps: list[dict]) -> None:
+    """Assign sequential stepOrder across the flattened tree (repeats then children)."""
+    counter = [1]
+
+    def walk(lst: list[dict]) -> None:
+        for s in lst:
+            s["stepOrder"] = counter[0]
+            counter[0] += 1
+            if s.get("type") == "RepeatGroupDTO":
+                walk(s["workoutSteps"])
+
+    walk(steps)
+
+
 def build_workout(
     session: dict,
     *,
     name: str,
-    strategy: RepStrategy = RepStrategy.TIME,
+    strategy: RepStrategy = RepStrategy.REPS,
 ) -> BuildResult:
     """Build a Garmin strength-workout payload from one parsed session.
 
-    An unmapped exercise is collected and skipped, and its name is returned in
-    ``unmapped`` — the caller (push) decides whether that is acceptable. It is
-    never silently replaced with a different movement (CLAUDE.md).
+    Each exercise becomes one or more **set-blocks** (Garmin repeat groups): a run of
+    same-rep sets is one block that repeats N times over [exercise, rest]. Putting the
+    rest inside the iteration gives a break after *every* set — including the last, so
+    there is a break before the next exercise. An unmapped exercise is collected and
+    skipped, never silently replaced (CLAUDE.md).
     """
     steps: list[dict] = []
     unmapped: list[str] = []
-    order = 1
 
     for exercise in session.get("exercises", []):
         ex_name = exercise["name"]
@@ -125,54 +173,58 @@ def build_workout(
             unmapped.append(ex_name)
             continue
 
-        sets = exercise.get("sets") or []
         rest = exercise.get("rest")
+        rest_secs = (rest["value"] if isinstance(rest, dict) else rest) if rest else DEFAULT_REST_S
 
-        for i, s in enumerate(sets, start=1):
-            note = f"{ex_name} — set {i}/{len(sets)}"
-            if s.get("reps") is not None:
-                note = f"{ex_name} — set {i}/{len(sets)}: {s['reps']} reps"
-                steps.append(
-                    _rep_step(order, garmin.category, garmin.name, s["reps"], note, strategy)
-                )
-            elif s.get("duration") is not None:
-                secs = s["duration"] if isinstance(s["duration"], int) else s["duration"]["value"]
-                steps.append(_time_step(order, garmin.category, garmin.name, secs, note))
-            order += 1
+        for kind, value, count in _group_sets(exercise.get("sets") or []):
+            unit = "reps" if kind == "reps" else "s"
+            note = (f"{ex_name} — {count}x{value} {unit}" if count > 1
+                    else f"{ex_name} — {value} {unit}")
+            ex_step = _exercise_step(garmin.category, garmin.name, kind, value, note, strategy)
+            block = [ex_step, _rest_step(rest_secs)]
+            if count >= 2:
+                steps.append(_repeat_group(count, block))
+            else:
+                steps.extend(block)  # a single set needs no repeat wrapper
 
-            # Rest between sets, but not after the last set of an exercise.
-            if rest and i < len(sets):
-                secs = rest if isinstance(rest, int) else rest["value"]
-                steps.append(_rest_step(order, secs))
-                order += 1
-
+    _renumber(steps)
     payload = {
         "workoutName": name,
         "sportType": SPORT_STRENGTH,
         "workoutSegments": [
-            {
-                "segmentOrder": 1,
-                "sportType": SPORT_STRENGTH,
-                "workoutSteps": steps,
-            }
+            {"segmentOrder": 1, "sportType": SPORT_STRENGTH, "workoutSteps": steps}
         ],
     }
     return BuildResult(payload=payload, unmapped=unmapped, strategy=strategy)
 
 
+def _work_steps(steps: list[dict]) -> list[tuple[int, dict]]:
+    """(iterations, executable-step) for every working set, flattening repeat groups."""
+    out: list[tuple[int, dict]] = []
+    for s in steps:
+        if s.get("type") == "RepeatGroupDTO":
+            iters = s["numberOfIterations"]
+            for child in s["workoutSteps"]:
+                if child["stepType"]["stepTypeKey"] == "interval":
+                    out.append((iters, child))
+        elif s["stepType"]["stepTypeKey"] == "interval":
+            out.append((1, s))
+    return out
+
+
 def describe(result: BuildResult) -> str:
     """A human-readable dry-run summary of what would be created."""
     steps = result.payload["workoutSegments"][0]["workoutSteps"]
-    work = [s for s in steps if s["stepType"]["stepTypeKey"] == "interval"]
+    work = _work_steps(steps)
     lines = [
         f"workout: {result.payload['workoutName']}",
-        f"  strategy: {result.strategy.value}  ({len(work)} work steps, "
-        f"{len(steps)} total)",
+        f"  strategy: {result.strategy.value}  ({len(work)} set-blocks)",
     ]
-    for s in work:
+    for iters, s in work:
         cond = s["endCondition"]["conditionTypeKey"]
         val = s.get("endConditionValue", "lap")
-        lines.append(f"    {s.get('exerciseName') or s['category']:<28} {cond} {val}")
+        who = s.get("exerciseName") or s["category"]
+        lines.append(f"    {who:<28} {iters}x  {cond} {val}")
     if result.unmapped:
         lines.append(f"  UNMAPPED, skipped: {', '.join(sorted(set(result.unmapped)))}")
     return "\n".join(lines)
