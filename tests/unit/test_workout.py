@@ -111,6 +111,20 @@ class TestBuildWorkout:
         assert plank["endCondition"]["conditionTypeKey"] == "time"
         assert plank["endConditionValue"] == 60
 
+    def test_a_cardio_finisher_appends_a_timed_cardio_block(self):
+        session = {"exercises": [
+            {"name": "Supino reto", "sets": [{"reps": 10}], "rest": {"value": 60}}],
+            "finisher_cardio_s": {"value": 1800}}
+        steps = build_workout(session, name="x").payload["workoutSegments"][0]["workoutSteps"]
+        last = steps[-1]
+        assert last["category"] == "CARDIO"
+        assert last["endCondition"]["conditionTypeKey"] == "time"
+        assert last["endConditionValue"] == 1800
+
+    def test_no_finisher_means_no_cardio_block(self):
+        steps = build_workout(PYRAMID, name="x").payload["workoutSegments"][0]["workoutSteps"]
+        assert all(s.get("category") != "CARDIO" for s in steps)
+
     def test_steporders_are_sequential_across_the_tree(self):
         steps = build_workout(PYRAMID, name="x").payload["workoutSegments"][0]["workoutSteps"]
         orders = []

@@ -197,6 +197,17 @@ class TestMergedFirstExerciseCell:
         assert [s.reps for s in ex.sets] == [15, 15, 12, 12]
 
 
+class TestCardioFinisher:
+    def test_a_finisher_line_is_detected_with_its_minutes(self):
+        from rapha.protocol.ficha_pdf import _FINISHER_CARDIO
+        m = _FINISHER_CARDIO.search("obs. NO final do treino CÁRDIO 30 min")
+        assert m and m.group(1) == "30"
+
+    def test_a_plain_day_has_no_finisher(self):
+        from rapha.protocol.ficha_pdf import _FINISHER_CARDIO
+        assert _FINISHER_CARDIO.search("AQUECIMENTO NA ESTEIRA. só musculação.") is None
+
+
 class TestHeader:
     def test_day_number_and_muscle_groups(self):
         header = (

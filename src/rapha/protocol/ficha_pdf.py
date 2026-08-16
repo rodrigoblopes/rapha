@@ -52,6 +52,10 @@ _BARE_MINUTES = re.compile(r"^\W*(\d+)\s*min", re.IGNORECASE)
 _SECONDS = re.compile(r"(\d+)\s*(?:s\b|seg)", re.IGNORECASE)
 _MINUTES = re.compile(r"(\d+)\s*(?:m\b|min)", re.IGNORECASE)
 
+# "obs. NO final do treino CÁRDIO 30 min" — a cardio finisher, not a lifting row.
+_FINISHER_CARDIO = re.compile(
+    r"final\s+do\s+treino\s+c.rdio\s+(\d+)\s*min", re.IGNORECASE)
+
 _DAY = re.compile(r"\bDIA\s+(\d+)", re.IGNORECASE)
 _LEVEL = re.compile(
     r"\b(INICIANTES?|INTERMEDI[ÁA]RIOS?|AVAN[ÇC]ADOS?|ADAPTA[ÇC][ÃA]O|"
@@ -458,8 +462,11 @@ def parse_ficha(path: Path) -> Programme:
             level = header.level if header.level != "DESCONHECIDO" else level
             sheet_number = sheet_number or header.sheet_number
             weeks = weeks or header.weeks
+            fin = _FINISHER_CARDIO.search(page_text)
+            finisher = Seconds(int(fin.group(1)) * 60) if fin else None
             sessions.append(
-                Session(day=header.day, focus=header.focus, exercises=exercises)
+                Session(day=header.day, focus=header.focus, exercises=exercises,
+                        finisher_cardio_s=finisher)
             )
 
     if not sessions:

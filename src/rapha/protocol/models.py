@@ -66,6 +66,9 @@ class Session:
     day: int
     focus: str
     exercises: list[Exercise]
+    #: A cardio finisher the sheet prescribes for this day ("no final do treino
+    #: cárdio 30 min") — appended to the workout, not one of the lifting exercises.
+    finisher_cardio_s: Seconds | None = None
 
     @property
     def issues(self) -> list[str]:

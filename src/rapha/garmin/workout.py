@@ -98,6 +98,23 @@ def _rest_step(seconds: int) -> dict:
     }
 
 
+def _cardio_step(seconds: int) -> dict:
+    """A time-based cardio finisher (the sheet's 'no final do treino cárdio N min').
+
+    Category CARDIO renders as a "Cardio" block on the watch; a cooldown step would be
+    stored as rest, which a 30-minute treadmill session is not.
+    """
+    return {
+        "type": "ExecutableStepDTO",
+        "stepOrder": 0,
+        "stepType": _STEP_TYPES["interval"],
+        "category": "CARDIO",
+        "endCondition": _END_TIME,
+        "endConditionValue": seconds,
+        "description": f"Cárdio {seconds // 60} min — esteira",
+    }
+
+
 def _repeat_group(iterations: int, children: list[dict]) -> dict:
     return {
         "type": "RepeatGroupDTO",
@@ -186,6 +203,11 @@ def build_workout(
                 steps.append(_repeat_group(count, block))
             else:
                 steps.extend(block)  # a single set needs no repeat wrapper
+
+    finisher = session.get("finisher_cardio_s")
+    if finisher:
+        secs = finisher["value"] if isinstance(finisher, dict) else finisher
+        steps.append(_cardio_step(secs))
 
     _renumber(steps)
     payload = {
