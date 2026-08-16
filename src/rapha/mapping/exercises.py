@@ -37,10 +37,13 @@ _NOISE = {
     "no", "na", "com", "de", "do", "da", "c", "e", "ou", "em", "reto",
     "smith", "livre", "maquina", "máquina", "halter", "halteres", "barra",
     "w", "corda", "cabo", "pulley", "banco", "chao", "chão", "unilateral",
-    "alternado", "alternada", "sentado", "sentada", "pe", "pé",
+    "alternado", "alternada", "pe", "pé",
     "inclinado", "declinado", "aberto", "aberta", "fechado", "fechada",
     "pegada", "pronada", "supinada", "neutra", "isometria", "isometrico",
 }
+# NOTE: "sentado"/"sentada" (seated) are deliberately NOT noise — for calves and some
+# curls the seated vs standing position is the movement itself (soleus vs gastrocnemius),
+# so a "panturrilha sentado" key must survive normalisation to beat the bare "panturrilha".
 
 
 def normalise(name: str) -> str:
@@ -99,6 +102,14 @@ _TABLE: list[tuple[str, GarminExercise]] = [
     ("abdutora", GarminExercise("HIP_STABILITY", "STANDING_HIP_ABDUCTION")),
     ("elevacao pelvica", GarminExercise("HIP_RAISE", "BARBELL_HIP_THRUST_WITH_BENCH")),
     ("panturrilha", GarminExercise("CALF_RAISE", "STANDING_CALF_RAISE")),
+    # Seated calf raise is bent-knee (soleus) — a different movement from standing.
+    ("panturrilha sentado", GarminExercise("CALF_RAISE", "SEATED_CALF_RAISE")),
+    ("panturrilha sentada", GarminExercise("CALF_RAISE", "SEATED_CALF_RAISE")),
+    # Garmin has no leg-press calf raise; it is a straight-leg (gastrocnemius) movement
+    # like a standing raise, so STANDING is the closest — the step note keeps the real
+    # name so it is still distinguishable from the free-standing one.
+    ("panturrilha no leg press", GarminExercise("CALF_RAISE", "STANDING_CALF_RAISE")),
+    ("panturrilha leg press", GarminExercise("CALF_RAISE", "STANDING_CALF_RAISE")),
     ("passada", GarminExercise("LUNGE", "LUNGE")),
     ("afundo", GarminExercise("LUNGE", "LUNGE")),
     # shoulders
