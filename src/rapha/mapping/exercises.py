@@ -76,7 +76,10 @@ _TABLE: list[tuple[str, GarminExercise]] = [
     ("pulover", GarminExercise("PULL_UP", "STRAIGHT_ARM_PULLDOWN")),
     ("pull over", GarminExercise("PULL_UP", "STRAIGHT_ARM_PULLDOWN")),
     ("pullover", GarminExercise("PULL_UP", "STRAIGHT_ARM_PULLDOWN")),
-    ("barra fixa", GarminExercise("PULL_UP", "PULL_UP")),
+    # "barra" is stripped as noise (barbell), so a pull-up must key on the surviving
+    # "fixa" (the fixed/pull-up bar), not "barra fixa" which can never match.
+    ("fixa", GarminExercise("PULL_UP", "PULL_UP")),
+    ("fixa peito", GarminExercise("PULL_UP", "WIDE_GRIP_PULL_UP")),
     ("remada", GarminExercise("ROW", "BENT_OVER_ROW_WITH_BARBELL")),
     # legs. Names verified to survive Garmin's taxonomy (specific seated/lying leg-curl
     # names blank to "Leg Curl", and a leg *extension* only keeps its name under CRUNCH —
