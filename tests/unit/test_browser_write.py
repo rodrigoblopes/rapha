@@ -24,9 +24,9 @@ def test_strip_exercise_names_nulls_every_step_name_but_keeps_structure():
 
 
 def test_front_raise_maps_to_a_valid_garmin_category():
-    # Garmin has no FRONT_RAISE category; front raises live under LATERAL_RAISE.
+    # Garmin has no FRONT_RAISE category; front raises live under SHOULDER_PRESS.
     g = map_exercise("elevação frontal c/ barra")
-    assert g.category == "LATERAL_RAISE"
+    assert g.category == "SHOULDER_PRESS"
 
 
 def test_cross_over_maps_to_cable_crossover():
@@ -41,4 +41,4 @@ def test_a_built_workout_survives_name_stripping_as_valid_shape():
     payload = build_workout(session, name="x", strategy=RepStrategy.TIME).payload
     stripped = _strip_exercise_names(payload)
     step = stripped["workoutSegments"][0]["workoutSteps"][0]
-    assert step["category"] == "LATERAL_RAISE" and step["exerciseName"] is None
+    assert step["category"] == "SHOULDER_PRESS" and step["exerciseName"] is None

@@ -74,20 +74,22 @@ _TABLE: list[tuple[str, GarminExercise]] = [
     ("pull over", GarminExercise("PULL_UP", "STRAIGHT_ARM_PULLDOWN")),
     ("pullover", GarminExercise("PULL_UP", "STRAIGHT_ARM_PULLDOWN")),
     ("barra fixa", GarminExercise("PULL_UP", "PULL_UP")),
-    ("remada", GarminExercise("ROW", "BENT_OVER_ROW")),
-    # legs
+    ("remada", GarminExercise("ROW", "BENT_OVER_ROW_WITH_BARBELL")),
+    # legs. Names verified to survive Garmin's taxonomy (specific seated/lying leg-curl
+    # names blank to "Leg Curl", and a leg *extension* only keeps its name under CRUNCH —
+    # a Garmin quirk, but it displays correctly as "Leg Extensions").
     ("leg press", GarminExercise("SQUAT", "LEG_PRESS")),
     ("agachamento", GarminExercise("SQUAT", "SQUAT")),
     ("avanco", GarminExercise("LUNGE", "LUNGE")),
     ("terra", GarminExercise("DEADLIFT", "BARBELL_DEADLIFT")),
-    ("stiff", GarminExercise("DEADLIFT", "STIFF_LEG_DEADLIFT")),
-    ("flexor sentado", GarminExercise("LEG_CURL", "SEATED_LEG_CURL")),
-    ("flexor", GarminExercise("LEG_CURL", "LYING_LEG_CURL")),
-    ("extensor", GarminExercise("LEG_CURL", "LEG_EXTENSIONS")),
-    ("cadeira", GarminExercise("LEG_CURL", "LEG_EXTENSIONS")),
-    ("cadeira extensora", GarminExercise("LEG_CURL", "LEG_EXTENSIONS")),
-    ("cadeira flexora", GarminExercise("LEG_CURL", "SEATED_LEG_CURL")),
-    ("mesa flexora", GarminExercise("LEG_CURL", "LYING_LEG_CURL")),
+    ("stiff", GarminExercise("DEADLIFT", "BARBELL_DEADLIFT")),
+    ("flexor sentado", GarminExercise("LEG_CURL", "LEG_CURL")),
+    ("flexor", GarminExercise("LEG_CURL", "LEG_CURL")),
+    ("extensor", GarminExercise("CRUNCH", "LEG_EXTENSIONS")),
+    ("cadeira", GarminExercise("CRUNCH", "LEG_EXTENSIONS")),
+    ("cadeira extensora", GarminExercise("CRUNCH", "LEG_EXTENSIONS")),
+    ("cadeira flexora", GarminExercise("LEG_CURL", "LEG_CURL")),
+    ("mesa flexora", GarminExercise("LEG_CURL", "LEG_CURL")),
     # The adductor/abductor machines are adduction/abduction, not a hip raise. Garmin
     # keeps these names only under HIP_STABILITY (its taxonomy is asymmetric: adduction
     # carries no "HIP", abduction does). HIP_RAISE would blank the name to "Hip Raise".
@@ -95,23 +97,26 @@ _TABLE: list[tuple[str, GarminExercise]] = [
     ("cadeira abdutora", GarminExercise("HIP_STABILITY", "STANDING_HIP_ABDUCTION")),
     ("adutora", GarminExercise("HIP_STABILITY", "STANDING_ADDUCTION")),
     ("abdutora", GarminExercise("HIP_STABILITY", "STANDING_HIP_ABDUCTION")),
-    ("elevacao pelvica", GarminExercise("HIP_RAISE", "BARBELL_HIP_THRUST")),
+    ("elevacao pelvica", GarminExercise("HIP_RAISE", "BARBELL_HIP_THRUST_WITH_BENCH")),
     ("panturrilha", GarminExercise("CALF_RAISE", "STANDING_CALF_RAISE")),
     ("passada", GarminExercise("LUNGE", "LUNGE")),
     ("afundo", GarminExercise("LUNGE", "LUNGE")),
     # shoulders
     ("desenvolvimento", GarminExercise("SHOULDER_PRESS", "BARBELL_SHOULDER_PRESS")),
-    # Garmin has no FRONT_RAISE category — front raises live under LATERAL_RAISE.
+    # Garmin has no FRONT_RAISE category — lateral raises live under LATERAL_RAISE, but
+    # front raises live under SHOULDER_PRESS (only DUMBBELL_FRONT_RAISE survives).
     ("elevacao lateral", GarminExercise("LATERAL_RAISE", "DUMBBELL_LATERAL_RAISE")),
-    ("elevacao frontal", GarminExercise("LATERAL_RAISE", "BARBELL_FRONT_RAISE")),
+    ("elevacao frontal", GarminExercise("SHOULDER_PRESS", "DUMBBELL_FRONT_RAISE")),
     ("encolhimento", GarminExercise("SHRUG", "BARBELL_SHRUG")),
-    # arms
-    ("rosca scott", GarminExercise("CURL", "PREACHER_CURL")),
-    ("rosca inversa", GarminExercise("CURL", "REVERSE_CURL")),
-    ("rosca", GarminExercise("CURL", "BICEPS_CURL")),
-    ("triceps testa", GarminExercise("TRICEPS_EXTENSION", "LYING_TRICEPS_EXTENSION")),
-    ("triceps frances", GarminExercise("TRICEPS_EXTENSION", "OVERHEAD_TRICEPS_EXTENSION")),
-    ("triceps", GarminExercise("TRICEPS_EXTENSION", "TRICEPS_PUSHDOWN")),
+    # arms. Bare names (BICEPS_CURL, TRICEPS_PUSHDOWN, …) blank; Garmin keeps the
+    # equipment-qualified variants it detects in real workouts.
+    ("rosca scott", GarminExercise("CURL", "EZ_BAR_PREACHER_CURL")),
+    ("rosca inversa", GarminExercise("CURL", "REVERSE_EZ_BAR_CURL")),
+    ("rosca", GarminExercise("CURL", "BARBELL_BICEPS_CURL")),
+    ("triceps testa", GarminExercise("TRICEPS_EXTENSION", "LYING_EZ_BAR_TRICEPS_EXTENSION")),
+    ("triceps frances",
+     GarminExercise("TRICEPS_EXTENSION", "SEATED_EZ_BAR_OVERHEAD_TRICEPS_EXTENSION")),
+    ("triceps", GarminExercise("TRICEPS_EXTENSION", "TRICEPS_PRESSDOWN")),
     # core / lower back
     ("hiperextensao", GarminExercise("HYPEREXTENSION", "HYPEREXTENSION")),
     ("lombar", GarminExercise("HYPEREXTENSION", "HYPEREXTENSION")),
