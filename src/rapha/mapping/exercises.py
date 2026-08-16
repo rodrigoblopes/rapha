@@ -36,7 +36,7 @@ class UnmappedExercise(KeyError):
 _NOISE = {
     "no", "na", "com", "de", "do", "da", "c", "e", "ou", "em", "reto",
     "smith", "livre", "maquina", "máquina", "halter", "halteres", "barra",
-    "w", "corda", "cabo", "pulley", "banco", "chao", "chão", "unilateral",
+    "w", "corda", "cabo", "pulley", "banco", "chao", "chão",
     "alternado", "alternada", "pe", "pé",
     "inclinado", "declinado", "aberto", "aberta", "fechado", "fechada",
     "pegada", "pronada", "supinada", "neutra", "isometria", "isometrico",
@@ -81,6 +81,10 @@ _TABLE: list[tuple[str, GarminExercise]] = [
     ("fixa", GarminExercise("PULL_UP", "PULL_UP")),
     ("fixa peito", GarminExercise("PULL_UP", "WIDE_GRIP_PULL_UP")),
     ("remada", GarminExercise("ROW", "BENT_OVER_ROW_WITH_BARBELL")),
+    # A one-arm row and a low/seated cable row are distinct from the bent-over barbell
+    # row. ("unilateral" is no longer stripped as noise so this key can survive.)
+    ("remada unilateral", GarminExercise("ROW", "ONE_ARM_BENT_OVER_ROW")),
+    ("remada baixa", GarminExercise("ROW", "SEATED_CABLE_ROW")),
     # legs. Names verified to survive Garmin's taxonomy (specific seated/lying leg-curl
     # names blank to "Leg Curl", and a leg *extension* only keeps its name under CRUNCH —
     # a Garmin quirk, but it displays correctly as "Leg Extensions").
