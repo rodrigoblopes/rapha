@@ -61,6 +61,8 @@ def normalise(name: str) -> str:
 _TABLE: list[tuple[str, GarminExercise]] = [
     # chest
     ("crucifixo", GarminExercise("FLYE", "DUMBBELL_FLYE")),
+    ("cross over", GarminExercise("FLYE", "CABLE_CROSSOVER")),
+    ("crossover", GarminExercise("FLYE", "CABLE_CROSSOVER")),
     ("supino", GarminExercise("BENCH_PRESS", "BARBELL_BENCH_PRESS")),
     ("paralelas", GarminExercise("PUSH_UP", "DIP")),
     ("flexao", GarminExercise("PUSH_UP", "PUSH_UP")),
@@ -90,8 +92,9 @@ _TABLE: list[tuple[str, GarminExercise]] = [
     ("afundo", GarminExercise("LUNGE", "LUNGE")),
     # shoulders
     ("desenvolvimento", GarminExercise("SHOULDER_PRESS", "BARBELL_SHOULDER_PRESS")),
-    ("elevacao lateral", GarminExercise("LATERAL_RAISE", "LATERAL_RAISE")),
-    ("elevacao frontal", GarminExercise("FRONT_RAISE", "FRONT_RAISE")),
+    # Garmin has no FRONT_RAISE category — front raises live under LATERAL_RAISE.
+    ("elevacao lateral", GarminExercise("LATERAL_RAISE", "DUMBBELL_LATERAL_RAISE")),
+    ("elevacao frontal", GarminExercise("LATERAL_RAISE", "BARBELL_FRONT_RAISE")),
     ("encolhimento", GarminExercise("SHRUG", "BARBELL_SHRUG")),
     # arms
     ("rosca scott", GarminExercise("CURL", "PREACHER_CURL")),

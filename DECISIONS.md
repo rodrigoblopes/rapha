@@ -428,3 +428,44 @@ the portal, which has no debug port, so the pull could not attach); a fully head
 stored password (ADR-007's rate-limit wall, and it reverses ADR-001's no-password invariant); and
 computing freshness only at build time (the dot would lie the moment an hour passed with the page
 open).
+
+---
+
+## ADR-013 — Writing workouts to Garmin over the CDP session
+
+**Date:** 2026-08-16
+
+Rapha's write path (`write.py`, ADR-001) needs OAuth tokens, and Garmin's rate-limited login
+(ADR-007) never let us mint them — the token store is empty. But the read pull already runs over a
+logged-in debug Chrome (ADR-008), and that same authenticated session can POST as well as GET. So
+creating and scheduling workouts happens the same way reading does: from inside the authenticated
+page, against Garmin's own `workout-service`.
+
+**Decision:** `browser_write.py` creates, schedules and deletes **workouts** over CDP — the same
+narrow surface as `write.py` (ADR-001), never an activity, never health data. It holds no credential
+of its own; the session lives in the user's browser. `push()` takes built payloads plus target
+dates, and `replace_prefix` deletes any existing workouts whose name starts with a given prefix
+before creating, so a re-run is idempotent (no duplicates, and the old schedule entries go with the
+deleted workouts).
+
+**Two failures found and fixed while pushing Sheet 02, worth pinning:**
+
+- **Bad exercise *category*, not name.** Garmin 400s a whole workout if a step's `category` is
+  outside its taxonomy. `elevação frontal` was mapped to a `FRONT_RAISE` category, which does not
+  exist — front raises live under `LATERAL_RAISE`. A wrong *name* within a valid category is
+  recoverable: `push()` retries a 400 with `_strip_exercise_names` (category only, always valid; the
+  specific movement is already in the step description), so a single unknown variant never sinks a
+  workout. A wrong *category* is not recoverable that way and must be fixed in the mapping.
+- **Console encoding.** Logging a `✓` crashed the run on the cp1252 Windows console *after* a
+  workout was already created, orphaning it. Log output is now ASCII-only, and `replace_prefix`
+  cleans up any orphan on the next run.
+
+**Scheduling policy (not from the course).** The Intermediário sheets say which weeks they cover but
+not which weekday each session lands on. Sheet 02's four sessions are placed on the first four days
+of each protocol week across weeks 5–8 — a clean, faithful default the user can rearrange in the
+Garmin app. Rapha pushes only the four lifting sessions; the empty "TREINADOR" placeholder day is
+dropped, and the cardio day (Módulo 14) stays the user's to place.
+
+**Reversibility.** Workouts and their schedule entries are deletable, and `push(replace_prefix=…)`
+plus `delete_workout` make the whole operation undoable — which is what made it safe to run against
+the real account.
