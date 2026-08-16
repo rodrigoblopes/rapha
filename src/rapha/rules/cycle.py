@@ -65,7 +65,14 @@ def resolve(
             day_of, cycle_day, False, src, f"repeats the day {src} session"
         )
     if cycle_day in sessions:
-        focus = sessions[cycle_day].get("focus", "")
+        session = sessions[cycle_day]
+        # An *explicitly empty* session is the sheet's rest slot (Cariani's sheets
+        # carry a "TREINADOR" placeholder day with no exercises: 4 training days, then
+        # this — the rest — then the cycle restarts). Treat it as rest. A fixture that
+        # simply omits the exercises key is not this case and stays a training day.
+        if "exercises" in session and not session["exercises"]:
+            return CyclePosition(day_of, cycle_day, True, None, "rest day")
+        focus = session.get("focus", "")
         return CyclePosition(day_of, cycle_day, False, cycle_day, focus)
 
     return CyclePosition(

@@ -5,12 +5,14 @@ from datetime import date
 from rapha.rules.cycle import resolve
 
 # A 4-distinct-day sheet that repeats: 5->1, 6->2, 7 rest, 8->3, 9->4, 10 restarts.
+# Real training sessions carry exercises; an *empty* one is a rest placeholder (below).
+_EX = [{"name": "x", "sets": [{"reps": 10}]}]
 PROGRAMME = {
     "sessions": [
-        {"day": 1, "focus": "PERNAS", "exercises": []},
-        {"day": 2, "focus": "PEITO", "exercises": []},
-        {"day": 3, "focus": "COSTAS", "exercises": []},
-        {"day": 4, "focus": "OMBRO", "exercises": []},
+        {"day": 1, "focus": "PERNAS", "exercises": _EX},
+        {"day": 2, "focus": "PEITO", "exercises": _EX},
+        {"day": 3, "focus": "COSTAS", "exercises": _EX},
+        {"day": 4, "focus": "OMBRO", "exercises": _EX},
     ],
     "rotation": [
         {"day": 5, "repeats_day": 1},
@@ -57,3 +59,17 @@ class TestRotation:
         pos = resolve(PROGRAMME, start=START, today=START.replace(day=10))
         assert pos.cycle_day == 1
         assert pos.session_day == 1
+
+    def test_an_empty_placeholder_session_reads_as_rest(self):
+        # Cariani's sheets carry a "TREINADOR" day with no exercises — 4 train, then
+        # this rest, then restart. A 5-session sheet where day 5 is empty:
+        sheet = {"sessions": [
+            {"day": 1, "focus": "A", "exercises": _EX},
+            {"day": 2, "focus": "B", "exercises": _EX},
+            {"day": 3, "focus": "C", "exercises": _EX},
+            {"day": 4, "focus": "D", "exercises": _EX},
+            {"day": 5, "focus": "TREINADOR", "exercises": []},
+        ], "rotation": []}
+        assert resolve(sheet, start=START, today=START.replace(day=5)).is_rest
+        # …and day 6 restarts the 5-day cycle on session 1.
+        assert resolve(sheet, start=START, today=START.replace(day=6)).session_day == 1

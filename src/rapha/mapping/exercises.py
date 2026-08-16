@@ -69,6 +69,10 @@ _TABLE: list[tuple[str, GarminExercise]] = [
     # back
     ("puxador", GarminExercise("PULL_UP", "LAT_PULLDOWN")),
     ("puxada", GarminExercise("PULL_UP", "LAT_PULLDOWN")),
+    # a standing cable pull-over is a straight-arm cable pulldown (lat isolation)
+    ("pulover", GarminExercise("PULL_UP", "STRAIGHT_ARM_PULLDOWN")),
+    ("pull over", GarminExercise("PULL_UP", "STRAIGHT_ARM_PULLDOWN")),
+    ("pullover", GarminExercise("PULL_UP", "STRAIGHT_ARM_PULLDOWN")),
     ("barra fixa", GarminExercise("PULL_UP", "PULL_UP")),
     ("remada", GarminExercise("ROW", "BENT_OVER_ROW")),
     # legs

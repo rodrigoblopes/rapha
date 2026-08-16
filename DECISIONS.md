@@ -460,11 +460,15 @@ deleted workouts).
   workout was already created, orphaning it. Log output is now ASCII-only, and `replace_prefix`
   cleans up any orphan on the next run.
 
-**Scheduling policy (not from the course).** The Intermediário sheets say which weeks they cover but
-not which weekday each session lands on. Sheet 02's four sessions are placed on the first four days
-of each protocol week across weeks 5–8 — a clean, faithful default the user can rearrange in the
-Garmin app. Rapha pushes only the four lifting sessions; the empty "TREINADOR" placeholder day is
-dropped, and the cardio day (Módulo 14) stays the user's to place.
+**Scheduling policy — the sheet's own rotation.** The Intermediário sheets run a **5-day rolling
+cycle**: D1, D2, D3, D4, then a rest day (the empty "TREINADOR" placeholder session), then the cycle
+restarts — *not* a fixed Mon–Sun week. So the training days roll through the calendar (Sheet 02
+starts D1 on Thu Aug 20, rest lands Mon Aug 24, D1 restarts Tue Aug 25, and so on). The cycle is
+anchored to the **sheet's** first week, not to protocol day 1, so `cycle.resolve` shows the right
+session the moment a sheet goes live; and an *explicitly empty* session reads as the rest slot
+(distinct from a test fixture that merely omits exercises). A first attempt placed the four sessions
+on the first four days of each week — corrected once the sheet's real rotation was confirmed. Rapha
+pushes only the four lifting sessions; the cardio day (Módulo 14) stays the user's to place.
 
 **Reversibility.** Workouts and their schedule entries are deletable, and `push(replace_prefix=…)`
 plus `delete_workout` make the whole operation undoable — which is what made it safe to run against

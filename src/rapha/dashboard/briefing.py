@@ -284,7 +284,8 @@ def _overview(days, acts, programmes, st, today) -> dict:
     recovery = assess_recovery(days, today=today)
     start = date.fromisoformat(st["protocol_start"]) if st.get("protocol_start") else today
     sheet = _live_sheet(programmes, st, today)
-    pos = cycle.resolve(sheet, start=start, today=today) if sheet else None
+    cyc_start = _sheet_cycle_start(st, sheet, start)
+    pos = cycle.resolve(sheet, start=cyc_start, today=today) if sheet else None
     return {
         "day_of_60": (today - start).days + 1,
         "week": _protocol_week(st, today),
@@ -323,6 +324,18 @@ def _protocol_week(st, today) -> int | None:
     if not start:
         return None
     return max(1, (today - date.fromisoformat(start)).days // 7 + 1)
+
+
+def _sheet_cycle_start(st, sheet, protocol_start):
+    """The date a sheet's rotation restarts from — its first week, not day 1 of 60.
+
+    Sheet 02 covers weeks 5–8, so its cycle begins on the Monday-equivalent of week 5,
+    not on the protocol start. Anchoring the cycle here makes "today's session" correct
+    the moment the sheet goes live, instead of continuing Sheet 01's count.
+    """
+    weeks = _sheet_weeks(sheet.get("weeks", "")) if sheet else set()
+    first_week = min(weeks) if weeks else 1
+    return protocol_start + timedelta(days=(first_week - 1) * 7)
 
 
 def _live_sheet(programmes, st, today=None) -> dict | None:
@@ -394,7 +407,7 @@ def _training(programmes, st, today) -> dict:
     start = date.fromisoformat(st["protocol_start"]) if st.get("protocol_start") else today
     if not sheet:
         return {"available": False}
-    pos = cycle.resolve(sheet, start=start, today=today)
+    pos = cycle.resolve(sheet, start=_sheet_cycle_start(st, sheet, start), today=today)
     if pos.is_rest or pos.session_day is None:
         return {"available": True, "rest": True, "focus": "Rest day",
                 "note": pos.note, "level": sheet["level"]}
