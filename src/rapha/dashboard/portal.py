@@ -395,11 +395,15 @@ def _today_tab(b: dict) -> str:
         cls = "good" if s["good"] else ("bad" if s["good"] is False else "warn")
         hib = s.get("higher_is_better", True)
         dir_txt = "↑ higher is better" if hib else "↓ lower is better"
+        recent = s.get("recent") or ""
+        recent_html = (
+            f'<div style="color:var(--dim);font-size:11px;font-weight:400;'
+            f'margin-top:2px;text-align:right">{_e(recent)}</div>' if recent else "")
         sig_rows += (
             f'<div class="sig"><span>{_e(s["label"])} '
             f'<span style="color:var(--dim);font-size:11px;font-weight:400">'
             f'{dir_txt}</span></span>'
-            f'<span class="v {cls}">{_e(s["note"])}</span></div>'
+            f'<span class="v {cls}">{_e(s["note"])}{recent_html}</span></div>'
         )
 
     first_meal = meals["meals"][0] if meals.get("meals") else None

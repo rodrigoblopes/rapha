@@ -300,7 +300,7 @@ def _overview(days, acts, programmes, st, today) -> dict:
             "signals": [
                 {"label": s.label, "latest": s.latest, "baseline": s.baseline,
                  "good": s.good, "note": s.note,
-                 "higher_is_better": s.higher_is_better}
+                 "higher_is_better": s.higher_is_better, "recent": s.recent}
                 for s in recovery.signals
             ],
         },

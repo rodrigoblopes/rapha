@@ -32,6 +32,7 @@ class RecoverySignal:
     good: bool | None          # True = favourable, False = unfavourable, None = no data
     note: str
     higher_is_better: bool = True   # which direction of this metric is the good one
+    recent: str = ""               # the last few actual readings, for a "where from?" caption
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,8 +46,23 @@ def _mean(xs: list[float]) -> float | None:
     return sum(xs) / len(xs) if xs else None
 
 
+def _fmt(value: float, unit: str) -> str:
+    """A readable value for the note. Sleep hours become h:mm (9.53 -> 9h32m); the
+    rest keep their integer unit (55ms, 51, 30)."""
+    if unit == "h":
+        hours = int(value)
+        minutes = round((value - hours) * 60)
+        return f"{hours}h{minutes:02d}m"
+    return f"{value:.0f}{unit}"
+
+
 def assess_recovery(days: list[DailyMetrics], *, today: date) -> RecoveryRead:
-    """Compare the last night or two against the trailing ~3-week baseline."""
+    """Compare the most recent night against the trailing ~3-week baseline.
+
+    ``latest`` is the newest actual reading (what you see on Garmin this morning),
+    not a multi-day mean — a 3-night average of sleep read as "last night" is
+    exactly the confusion this avoids. The baseline stays the trailing average.
+    """
     window = [d for d in days if today - timedelta(days=28) <= d.on <= today]
     recent = [d for d in window if d.on >= today - timedelta(days=2)]
     prior = [d for d in window if d.on < today - timedelta(days=2)]
@@ -55,11 +71,14 @@ def assess_recovery(days: list[DailyMetrics], *, today: date) -> RecoveryRead:
     votes: list[bool] = []
 
     def add(label, getter, higher_is_better, unit, tol):
-        latest = _mean([getter(d) for d in recent if getter(d) is not None])
+        readings = sorted((d.on, getter(d)) for d in window if getter(d) is not None)
+        latest = readings[-1][1] if readings else None
         base = _mean([getter(d) for d in prior if getter(d) is not None])
+        # The last 3 nights, oldest to newest, so the caption ends on the headline value.
+        recent3 = " › ".join(_fmt(v, unit) for _, v in readings[-3:])
         if latest is None or base is None:
             signals.append(RecoverySignal(label, latest, base, None, "no recent reading",
-                                          higher_is_better))
+                                          higher_is_better, recent3))
             return
         delta = latest - base
         favourable = (delta >= -tol) if higher_is_better else (delta <= tol)
@@ -68,8 +87,8 @@ def assess_recovery(days: list[DailyMetrics], *, today: date) -> RecoveryRead:
         good_word = "steady" if abs(delta) <= tol else ("good" if favourable else "watch")
         signals.append(RecoverySignal(
             label, round(latest, 1), round(base, 1), favourable,
-            f"{latest:.0f}{unit} vs {base:.0f}{unit} baseline — {direction}, {good_word}",
-            higher_is_better,
+            f"{_fmt(latest, unit)} vs {_fmt(base, unit)} baseline — {direction}, {good_word}",
+            higher_is_better, f"last 3: {recent3}",
         ))
         votes.append(favourable)
 
