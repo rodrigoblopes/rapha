@@ -26,7 +26,10 @@ from ..models import Activity, DailyMetrics, Measurement, Source
 from ..units import Grams, Seconds
 from .read import activity_from_payload, daily_from_payloads
 
-CDP_URL = "http://127.0.0.1:9222"
+# localhost, not 127.0.0.1: Chrome 151+ binds the debug port to ::1 (IPv6), so an
+# IPv4-only 127.0.0.1 connect gets ECONNREFUSED. localhost resolves to whichever
+# stack Chrome chose.
+CDP_URL = "http://localhost:9222"
 GC = "https://connect.garmin.com/gc-api"
 
 # One JS pass: pull activities, then per-day wellness, weight, and the exercise

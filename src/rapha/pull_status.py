@@ -64,7 +64,7 @@ def read_last_pull(home) -> dict | None:
 def chrome_debug_up(port: int = DEBUG_PORT, *, timeout: float = 0.4) -> bool:
     """Is a Chrome listening on the debug port right now? A cheap TCP connect."""
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+        with socket.create_connection(("localhost", port), timeout=timeout):
             return True
     except OSError:
         return False

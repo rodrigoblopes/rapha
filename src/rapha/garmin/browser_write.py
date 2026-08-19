@@ -12,7 +12,10 @@ is the optional `browser` extra, imported lazily.
 
 from __future__ import annotations
 
-CDP_URL = "http://127.0.0.1:9222"
+# localhost, not 127.0.0.1: Chrome 151+ binds the debug port to ::1 (IPv6), so an
+# IPv4-only 127.0.0.1 connect gets ECONNREFUSED. localhost resolves to whichever
+# stack Chrome chose.
+CDP_URL = "http://localhost:9222"
 GC = "https://connect.garmin.com/gc-api"
 
 _CREATE_JS = """
