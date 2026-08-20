@@ -172,3 +172,32 @@ class TestDescribe:
         assert "Day 1" in text
         assert "UNMAPPED" in text
         assert "Movimento Alienígena" in text
+
+
+class TestWeightPrefill:
+    """Pre-filling last session's load onto each set — so the watch shows a target
+    to confirm or beat, and (with the rest-step fix) prompts for weight per set."""
+
+    def _first_interval(self, payload):
+        for st in payload["workoutSegments"][0]["workoutSteps"]:
+            steps = st["workoutSteps"] if st.get("type") == "RepeatGroupDTO" else [st]
+            for c in steps:
+                if c["stepType"]["stepTypeKey"] == "interval" and c.get("category") != "CARDIO":
+                    return c
+        raise AssertionError("no interval step")
+
+    def test_a_known_load_becomes_weightValue_in_kilograms(self):
+        r = build_workout(SESSION, name="x", loads={"BARBELL_BENCH_PRESS": 82500})
+        step = self._first_interval(r.payload)
+        assert step["weightValue"] == 82.5
+        assert step["weightUnit"]["unitKey"] == "kilogram"
+
+    def test_no_load_leaves_the_step_weightless(self):
+        r = build_workout(SESSION, name="x")   # no loads
+        step = self._first_interval(r.payload)
+        assert "weightValue" not in step
+
+    def test_an_unknown_exercise_is_not_given_a_weight(self):
+        r = build_workout(SESSION, name="x", loads={"SOME_OTHER_LIFT": 50000})
+        step = self._first_interval(r.payload)
+        assert "weightValue" not in step

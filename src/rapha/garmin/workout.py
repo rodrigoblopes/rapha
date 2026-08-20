@@ -51,6 +51,9 @@ _END_TIME = {"conditionTypeId": 2, "conditionTypeKey": "time"}
 _END_LAP = {"conditionTypeId": 1, "conditionTypeKey": "lap.button"}
 _END_ITERATIONS = {"conditionTypeId": 7, "conditionTypeKey": "iterations"}
 
+#: Garmin's kilogram unit for a set's target weight (base unit grams, hence factor 1000).
+_WEIGHT_KG = {"unitId": 8, "unitKey": "kilogram", "factor": 1000.0}
+
 #: A break between sets/exercises when the sheet does not state a rest.
 DEFAULT_REST_S = 60
 
@@ -72,8 +75,13 @@ class BuildResult:
 
 
 def _exercise_step(category: str, name: str | None, kind: str, value: int, note: str,
-                   strategy: RepStrategy) -> dict:
-    """One working set as an executable step. ``kind`` is 'reps' or 'time'."""
+                   strategy: RepStrategy, weight_g: int | None = None) -> dict:
+    """One working set as an executable step. ``kind`` is 'reps' or 'time'.
+
+    ``weight_g``, when known, pre-fills the target load in kilograms so the watch
+    shows last session's weight to confirm or beat (and, with the rest-step fix,
+    prompts to log it per set).
+    """
     step = {
         "type": "ExecutableStepDTO",
         "stepOrder": 0,  # renumbered at the end
@@ -82,6 +90,9 @@ def _exercise_step(category: str, name: str | None, kind: str, value: int, note:
         "exerciseName": name,
         "description": note,
     }
+    if weight_g and weight_g > 0:
+        step["weightValue"] = round(weight_g / 1000, 2)   # grams -> kg
+        step["weightUnit"] = dict(_WEIGHT_KG)
     if kind == "time":
         step["endCondition"] = _END_TIME
         step["endConditionValue"] = value
@@ -176,6 +187,7 @@ def build_workout(
     *,
     name: str,
     strategy: RepStrategy = RepStrategy.REPS,
+    loads: dict[str, int] | None = None,
 ) -> BuildResult:
     """Build a Garmin strength-workout payload from one parsed session.
 
@@ -199,11 +211,13 @@ def build_workout(
         rest = exercise.get("rest")
         rest_secs = (rest["value"] if isinstance(rest, dict) else rest) if rest else DEFAULT_REST_S
 
+        load_g = (loads or {}).get(garmin.name)
         for kind, value, count in _group_sets(exercise.get("sets") or []):
             unit = "reps" if kind == "reps" else "s"
             note = (f"{ex_name} — {count}x{value} {unit}" if count > 1
                     else f"{ex_name} — {value} {unit}")
-            ex_step = _exercise_step(garmin.category, garmin.name, kind, value, note, strategy)
+            ex_step = _exercise_step(garmin.category, garmin.name, kind, value, note,
+                                     strategy, weight_g=load_g)
             block = [ex_step, _rest_step(rest_secs)]
             if count >= 2:
                 steps.append(_repeat_group(count, block))
