@@ -92,8 +92,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 .ex:last-child{border:none}.ex .nm{font-weight:550}.ex .sc{color:var(--dim);font-size:13px;margin-top:2px}
 .ex .rt{color:var(--dim);font-size:12px;white-space:nowrap}
 .note{color:var(--dim);font-size:13px;line-height:1.6;margin-top:8px}
-.callrow{margin-top:6px;font-size:13px;line-height:1.5}.callrow strong{padding:2px 8px;border-radius:6px;font-size:13px}.callrow.good strong{background:rgba(60,200,120,.16);color:var(--good)}.callrow.warn strong{background:rgba(230,180,60,.16);color:var(--warn)}.callrow.muted strong{background:rgba(140,150,160,.16);color:var(--dim)}.callrow .why{display:block;color:var(--dim);font-size:11px;margin-top:3px}
+.callrow{margin-top:6px;font-size:13px;line-height:1.5}.callrow strong{padding:2px 8px;border-radius:6px;font-size:13px}.callrow.good strong{background:rgba(60,200,120,.16);color:var(--accent)}.callrow.warn strong{background:rgba(230,180,60,.16);color:var(--amber)}.callrow.muted strong{background:rgba(140,150,160,.16);color:var(--dim)}.callrow .why{display:block;color:var(--dim);font-size:11px;margin-top:3px}
 .vbars{display:flex;gap:5px;align-items:flex-end;height:64px;margin:14px 0 4px}.vbar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}.vfill{width:70%;background:var(--cyan);border-radius:3px 3px 0 0;min-height:2px}.vlbl{font-size:9px;color:var(--dim);margin-top:3px;white-space:nowrap}
+.adjust{margin:10px 0 14px;padding:10px 12px;border-radius:8px;border-left:3px solid var(--dim)}.adjust.good{border-color:var(--accent);background:rgba(60,200,120,.08)}.adjust.warn{border-color:var(--amber);background:rgba(230,180,60,.08)}.adjust.bad{border-color:var(--red);background:rgba(230,90,90,.08)}.adjust strong{font-size:14px}.ad-rir{font-size:12px;color:var(--dim);margin-top:2px}
 .gsheet{background:var(--card2);border:1px dashed var(--line);border-radius:11px;padding:14px;
   font:13px/1.7 ui-monospace,"SF Mono",Menlo,monospace;white-space:pre-wrap;overflow-x:auto}
 .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
@@ -481,7 +482,13 @@ def _call_line(call: dict | None) -> str:
     if not call:
         return ""
     dec = call.get("decision")
-    if dec == "progress" and call.get("suggested_kg") is not None:
+    gated = call.get("gated")
+    if dec == "progress" and gated and call.get("last_kg") is not None:
+        cls = "warn"
+        head = f'→ Hold {call["last_kg"]:g} kg today (recovery)'
+    elif dec == "progress" and gated:
+        cls, head = "warn", "→ Hold today (recovery)"
+    elif dec == "progress" and call.get("suggested_kg") is not None:
         cls, head = "good", f'↗ Try {call["suggested_kg"]:g} kg'
         if call.get("last_kg") is not None:
             head += f' (last {call["last_kg"]:g} kg × {call["target_reps"]})'
@@ -495,6 +502,16 @@ def _call_line(call: dict | None) -> str:
         cls, head = "muted", "○ Find your working load"
     return (f'<div class="callrow {cls}"><strong>{_e(head)}</strong>'
             f'<span class="why">{_e(call.get("reasoning",""))}</span></div>')
+
+
+def _adjustment_banner(adj: dict | None) -> str:
+    """The recovery-driven session adjustment, as a coloured banner above the exercises."""
+    if not adj:
+        return ""
+    cls = {"green": "good", "amber": "warn", "red": "bad"}.get(adj.get("readiness"), "muted")
+    return (f'<div class="adjust {cls}"><strong>{_e(adj.get("headline",""))}</strong>'
+            f'<div class="ad-rir">Leave {_e(adj.get("reps_in_reserve",""))}</div>'
+            f'<div class="note">{_e(adj.get("detail",""))}</div></div>')
 
 
 def _training_tab(b: dict) -> str:
@@ -530,6 +547,7 @@ def _training_tab(b: dict) -> str:
 <div class="tab" id="training">
   <div class="card">
     <h2>{_e(tr["level"])} · Day {tr["day"]} · {_e(tr["focus"])}</h2>
+    {_adjustment_banner(tr.get("adjustment"))}
     {ex_rows}
     <div class="note"><strong>Progression:</strong> {_e(tr["progression"])}</div>
   </div>

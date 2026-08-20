@@ -170,6 +170,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
 
     briefing["overview"] = _overview(days, acts, programmes, st, today)
     briefing["training"] = _training(cfg, programmes, st, today)
+    _apply_autoregulation(briefing)
     briefing["meals"] = _meals(days, diets, foods, cfg, st, today, measurements)
     briefing["performance"] = _performance(days, acts, today, cfg.home)
     briefing["volume"] = _volume(cfg, acts, programmes, st, today)
@@ -630,6 +631,30 @@ def _performance(days, acts, today, cfg_home) -> dict:
             for a in sorted(acts, key=lambda a: a.start, reverse=True)[:12]
         ],
     }
+
+
+def _apply_autoregulation(briefing: dict) -> None:
+    """Fold this morning's recovery into today's session: an adjustment banner, and a
+    gate that holds load (never adds a plate) on an amber/red day."""
+    from ..rules.autoregulation import adjust_for_recovery
+
+    rec = briefing.get("overview", {}).get("recovery", {}) or {}
+    off = [s["label"] for s in rec.get("signals", []) if s.get("good") is False]
+    adj = adjust_for_recovery(rec.get("status", "unknown"), off)
+
+    tr = briefing.get("training", {})
+    if not tr.get("available") or tr.get("rest"):
+        return
+    tr["adjustment"] = {
+        "readiness": adj.readiness, "load_directive": adj.load_directive,
+        "reps_in_reserve": adj.reps_in_reserve, "gate_progression": adj.gate_progression,
+        "headline": adj.headline, "detail": adj.detail,
+    }
+    if adj.gate_progression:
+        for ex in tr.get("exercises", []):
+            call = ex.get("call")
+            if call and call.get("decision") == "progress":
+                call["gated"] = True
 
 
 def _cycle_shape(sheet) -> tuple[int, int]:
