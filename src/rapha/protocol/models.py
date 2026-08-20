@@ -14,6 +14,10 @@ class SetPrescription:
     index: int
     reps: int | None = None
     duration: Seconds | None = None
+    #: Movement cadence when the sheet states one (e.g. "3-1-1", "controlada"). The
+    #: quality signal M17's progression turns on — a rep only counts at the prescribed
+    #: tempo — held here so it can travel with the set instead of living in a note.
+    tempo: str | None = None
 
     def __post_init__(self) -> None:
         if (self.reps is None) == (self.duration is None):

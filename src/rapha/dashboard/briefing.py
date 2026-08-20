@@ -476,6 +476,7 @@ def _session_progression(cfg, session) -> tuple[dict, dict]:
 def _training(cfg, programmes, st, today) -> dict:
     from ..garmin.workout import RepStrategy, build_workout
     from ..mapping.exercises import try_map
+    from ..rules.methods import method_cue
 
     sheet = _live_sheet(programmes, st, today)
     start = date.fromisoformat(st["protocol_start"]) if st.get("protocol_start") else today
@@ -512,6 +513,8 @@ def _training(cfg, programmes, st, today) -> dict:
             "rest_s": (rest["value"] if isinstance(rest, dict) else rest),
             "issues": ex.get("issues") or [],
             "call": calls.get(ex["name"]),
+            "method": (lambda mc: {"label": mc[0], "cue": mc[1]} if mc else None)(
+                method_cue(ex["name"])),
         })
         gm = try_map(ex["name"])
         if gm:

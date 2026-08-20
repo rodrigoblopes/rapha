@@ -93,6 +93,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 .ex .rt{color:var(--dim);font-size:12px;white-space:nowrap}
 .note{color:var(--dim);font-size:13px;line-height:1.6;margin-top:8px}
 .callrow{margin-top:6px;font-size:13px;line-height:1.5}.callrow strong{padding:2px 8px;border-radius:6px;font-size:13px}.callrow.good strong{background:rgba(60,200,120,.16);color:var(--accent)}.callrow.warn strong{background:rgba(230,180,60,.16);color:var(--amber)}.callrow.muted strong{background:rgba(140,150,160,.16);color:var(--dim)}.callrow .why{display:block;color:var(--dim);font-size:11px;margin-top:3px}
+.method{margin-top:5px;font-size:11px;line-height:1.5}.method strong{color:var(--cyan)}.method span{color:var(--dim)}
 .vbars{display:flex;gap:5px;align-items:flex-end;height:64px;margin:14px 0 4px}.vbar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}.vfill{width:70%;background:var(--cyan);border-radius:3px 3px 0 0;min-height:2px}.vlbl{font-size:9px;color:var(--dim);margin-top:3px;white-space:nowrap}
 .adjust{margin:10px 0 14px;padding:10px 12px;border-radius:8px;border-left:3px solid var(--dim)}.adjust.good{border-color:var(--accent);background:rgba(60,200,120,.08)}.adjust.warn{border-color:var(--amber);background:rgba(230,180,60,.08)}.adjust.bad{border-color:var(--red);background:rgba(230,90,90,.08)}.adjust strong{font-size:14px}.ad-rir{font-size:12px;color:var(--dim);margin-top:2px}
 .gsheet{background:var(--card2);border:1px dashed var(--line);border-radius:11px;padding:14px;
@@ -559,6 +560,14 @@ def _recovery_emoji(status: str) -> str:
     return {"green": "●", "amber": "●", "red": "●"}.get(status, "●")
 
 
+def _method_line(method: dict | None) -> str:
+    """A technique cue (isometria, negative emphasis, …) when the movement names one."""
+    if not method:
+        return ""
+    return (f'<div class="method"><strong>{_e(method["label"])}</strong> '
+            f'<span>{_e(method["cue"])}</span></div>')
+
+
 def _call_line(call: dict | None) -> str:
     """The double-progression call for one exercise: what load to try, and why.
 
@@ -617,7 +626,7 @@ def _training_tab(b: dict) -> str:
         ex_rows += (
             f'<div class="ex"><div><div class="nm">{_e(ex["name"].title())}</div>'
             f'<div class="sc">{ex["sets"]} sets · reps {_e(ex["scheme"])}</div>'
-            f'{_call_line(ex.get("call"))}{warn}</div>'
+            f'{_call_line(ex.get("call"))}{_method_line(ex.get("method"))}{warn}</div>'
             f'<div class="rt">{rest}</div></div>'
         )
 
@@ -636,6 +645,7 @@ def _training_tab(b: dict) -> str:
     {_adjustment_banner(tr.get("adjustment"))}
     {ex_rows}
     <div class="note"><strong>Progression:</strong> {_e(tr["progression"])}</div>
+    <div class="note"><strong>Cadence:</strong> every rep at a controlled tempo — a rep only counts toward the target if the form held; a set rushed with momentum is a different, lesser stimulus (M15/M17).</div>
   </div>
   <div class="card">
     <h2>Set this in Garmin Connect</h2>
