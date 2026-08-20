@@ -6,8 +6,10 @@ consolidating, hold-because-too-heavy.
 
 from rapha.rules.progression import (
     Decision,
+    NextSessionCall,
     SetResult,
     advise,
+    call_from_history,
     next_load_kg_x10,
 )
 
@@ -65,3 +67,55 @@ class TestReasoningIsAlwaysShown:
         ):
             assert advise(result).reasoning
             assert "M17" in advise(result).reasoning
+
+
+class TestCallFromHistory:
+    """Double progression read straight from Garmin's per-set history — the real
+    numbers the watch detected last session, not a hand-reported set."""
+
+    def test_no_history_establishes(self):
+        call = call_from_history(target_reps=12, last_sets=[])
+        assert call.decision is Decision.ESTABLISH
+        assert call.suggested_kg_x10 is None
+
+    def test_hitting_the_target_at_the_working_weight_progresses(self):
+        # Top working set was 80.0 kg for 12 reps against a 12-rep target -> add a plate.
+        call = call_from_history(
+            target_reps=12,
+            last_sets=[(12, 40000), (12, 80000), (12, 80000)],
+        )
+        assert call.decision is Decision.PROGRESS
+        assert call.last_weight_kg_x10 == 800
+        assert call.suggested_kg_x10 == 825          # +2.5 kg, smallest plate
+
+    def test_exceeding_the_target_progresses(self):
+        call = call_from_history(target_reps=10, last_sets=[(14, 60000)])
+        assert call.decision is Decision.PROGRESS
+        assert call.suggested_kg_x10 == 625
+
+    def test_falling_short_holds_the_same_load(self):
+        # 9 reps at 80 kg against a 12-rep target: too heavy, hold and build in.
+        call = call_from_history(target_reps=12, last_sets=[(9, 80000), (8, 80000)])
+        assert call.decision is Decision.HOLD
+        assert call.suggested_kg_x10 == 800          # keep last week's load
+
+    def test_bodyweight_progresses_by_reps_not_load(self):
+        call = call_from_history(target_reps=15, last_sets=[(15, None), (15, None)])
+        assert call.decision is Decision.PROGRESS
+        assert call.bodyweight is True
+        assert call.suggested_kg_x10 is None
+
+    def test_dumbbell_uses_a_smaller_step(self):
+        call = call_from_history(
+            target_reps=12, last_sets=[(12, 12000)], using_dumbbells=True)
+        assert call.decision is Decision.PROGRESS
+        assert call.suggested_kg_x10 == 130          # 12 -> 13 kg dumbbell rung
+
+    def test_every_call_explains_itself(self):
+        for call in (
+            call_from_history(target_reps=12, last_sets=[]),
+            call_from_history(target_reps=12, last_sets=[(12, 80000)]),
+            call_from_history(target_reps=12, last_sets=[(8, 80000)]),
+        ):
+            assert isinstance(call, NextSessionCall)
+            assert len(call.reasoning) > 20

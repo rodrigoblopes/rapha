@@ -113,3 +113,87 @@ def next_load_kg_x10(current_kg_x10: int, *, using_dumbbells: bool = False) -> i
                 return rung
         return current_kg_x10 + DUMBBELL_LADDER_KG_X10[0]
     return current_kg_x10 + PLATE_STEPS_KG_X10[0]
+
+@dataclass(frozen=True, slots=True)
+class NextSessionCall:
+    """The double-progression decision for one exercise, read from real history.
+
+    Unlike :func:`advise`, which takes a hand-reported set, this is fed straight
+    from Garmin's per-set detection (:class:`~rapha.garmin.exercise_store.SetRow`),
+    so it can name the load actually lifted and the concrete next step to try —
+    while staying, per M17, a suggestion the lifter confirms by feel.
+    """
+
+    decision: Decision
+    target_reps: int | None
+    last_weight_kg_x10: int | None
+    suggested_kg_x10: int | None
+    bodyweight: bool
+    reasoning: str
+
+
+def call_from_history(
+    target_reps: int | None,
+    last_sets: list[tuple[int | None, int | None]],
+    *,
+    using_dumbbells: bool = False,
+) -> NextSessionCall:
+    """Last session's sets + the rep target -> the M17 call, with a concrete load.
+
+    ``last_sets`` is ``[(reps, weight_g), ...]`` for the most recent session of one
+    movement (ACTIVE sets, in order). The working load is the heaviest set; the
+    reps at that load are judged against ``target_reps``. Progress adds the smallest
+    step; a short session holds and builds into the weight (M17).
+    """
+    weighted = [(r, w) for r, w in last_sets if w is not None]
+
+    # No history at all -> the load is not established yet.
+    if not last_sets:
+        return NextSessionCall(
+            Decision.ESTABLISH, target_reps, None, None, False,
+            "No logged history yet: pick the load you can move for the target reps "
+            "with cadenced form — that becomes the working weight (M17).",
+        )
+
+    # A bodyweight movement (no set carried a load): progress by reps, not by plate.
+    if not weighted:
+        best = max((r or 0) for r, _ in last_sets)
+        if target_reps is not None and best >= target_reps:
+            return NextSessionCall(
+                Decision.PROGRESS, target_reps, None, None, True,
+                f"Bodyweight: hit {best} against a {target_reps}-rep target last time "
+                "— add reps or a harder variation; there is no plate to add (M17).",
+            )
+        return NextSessionCall(
+            Decision.HOLD, target_reps, None, None, True,
+            f"Bodyweight: {best} reps last time, target {target_reps} — stay here "
+            "until the target is clean across all sets (M17).",
+        )
+
+    top_w = max(w for _, w in weighted)
+    reps_at_top = max((r or 0) for r, w in weighted if w == top_w)
+    last_kg_x10 = round(top_w / 100)   # grams -> kg×10 (80000 g -> 800)
+
+    # No rep target to judge against (a timed hold slipped through) -> just report.
+    if target_reps is None:
+        return NextSessionCall(
+            Decision.HOLD, None, last_kg_x10, last_kg_x10, False,
+            f"Last worked at {last_kg_x10 / 10:g} kg; no rep target on file to judge "
+            "progression — hold and confirm by feel (M17).",
+        )
+
+    if reps_at_top >= target_reps:
+        nxt = next_load_kg_x10(last_kg_x10, using_dumbbells=using_dumbbells)
+        return NextSessionCall(
+            Decision.PROGRESS, target_reps, last_kg_x10, nxt, False,
+            f"Hit {reps_at_top} at {last_kg_x10 / 10:g} kg against a {target_reps}-rep "
+            f"target — add the smallest step to {nxt / 10:g} kg. Reps stay fixed; only "
+            "the load moves (M17 double progression). Confirm it by feel.",
+        )
+    return NextSessionCall(
+        Decision.HOLD, target_reps, last_kg_x10, last_kg_x10, False,
+        f"Only {reps_at_top} clean reps at {last_kg_x10 / 10:g} kg against a "
+        f"{target_reps}-rep target — hold this load and work more sessions here until "
+        'the target is reachable, "mantenha o peso" (M17).',
+    )
+
