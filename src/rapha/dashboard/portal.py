@@ -297,6 +297,7 @@ function perfRange(tf, btn){
   document.querySelectorAll('#perfbar button').forEach(b=>b.classList.remove('on'));
   if(btn) btn.classList.add('on');
   const days={'7d':7,'30d':30,'90d':90,'1y':365,'all':100000}[tf]||30;
+  heroRange=days;
   const cutoff=Date.now()-days*86400000;
   document.querySelectorAll('[data-metric]').forEach(el=>{
     const key=el.getAttribute('data-metric'), unit=el.getAttribute('data-unit')||'';
@@ -425,6 +426,94 @@ window.addEventListener('DOMContentLoaded',function(){
   _drawIntraday();
   const b=document.querySelector('#perfbar button.def'); if(b) b.click();
 });
+var heroMetric='hrv';
+var heroRange=30;
+var HERO_META={
+  hrv:{unit:' ms',lower:false,name:'HRV'},
+  rhr:{unit:' bpm',lower:true,name:'resting HR'},
+  sleep:{unit:' h',lower:false,name:'sleep'},
+  tdee:{unit:' kcal',lower:false,name:'energy burned'},
+  weight:{unit:' kg',lower:true,name:'weight'}
+};
+function heroSelect(k,btn){
+  heroMetric=k;
+  var bs=document.querySelectorAll('#herosel button');
+  for(var i=0;i<bs.length;i++) bs[i].classList.remove('on');
+  if(btn) btn.classList.add('on');
+  drawHero();
+}
+function _hmean(a){var s=0;for(var i=0;i<a.length;i++)s+=a[i];return s/a.length;}
+function _hsd(a){var m=_hmean(a),s=0;for(var i=0;i<a.length;i++)s+=(a[i]-m)*(a[i]-m);return Math.sqrt(s/a.length);}
+function _hf(v){return Math.round(v*10)/10;}
+function drawHero(){
+  var num=document.getElementById('heronum'); if(!num) return;
+  var meta=HERO_META[heroMetric]||{unit:'',lower:false,name:heroMetric}, unit=meta.unit;
+  var all=(window.PERF&&window.PERF[heroMetric])||[], pts=[];
+  for(var i=0;i<all.length;i++){ if(all[i][1]!=null) pts.push([Date.parse(all[i][0]),all[i][1],all[i][0]]); }
+  pts.sort(function(a,b){return a[0]-b[0];});
+  var now=Date.now(), span=heroRange*86400000, cutoff=now-span;
+  var cur=pts.filter(function(p){return p[0]>=cutoff;});
+  var prev=pts.filter(function(p){return p[0]>=cutoff-span && p[0]<cutoff;});
+  var yy=document.getElementById('heroyax').children;
+  var oldchip=document.getElementById('heroplot').querySelector('.prevchip'); if(oldchip) oldchip.remove();
+  if(cur.length<2){
+    num.textContent='—';
+    document.getElementById('herounit').textContent='';
+    document.getElementById('herodelta').textContent='';
+    document.getElementById('heroverdict').textContent='Not enough data in this range yet.';
+    document.getElementById('herosvg').innerHTML='';
+    document.getElementById('heroxax').innerHTML='';
+    yy[0].textContent='';yy[1].textContent='';yy[2].textContent='';
+    return;
+  }
+  var vals=cur.map(function(p){return p[1];});
+  var curAvg=_hmean(vals), sd=_hsd(vals);
+  var prevAvg=prev.length? _hmean(prev.map(function(p){return p[1];})):null;
+  var Name=meta.name.charAt(0).toUpperCase()+meta.name.slice(1);
+  num.textContent=_hf(curAvg);
+  document.getElementById('herounit').textContent=unit.trim()+' avg';
+  var dEl=document.getElementById('herodelta');
+  if(prevAvg!=null){
+    var d=curAvg-prevAvg, good=meta.lower?d<0:d>0;
+    var arrow=d>0?'↑':(d<0?'↓':'→');
+    dEl.textContent=arrow+' '+(d>=0?'+':'')+_hf(d)+unit;
+    dEl.style.color=Math.abs(d)<1e-9?'var(--dim)':(good?'var(--accent)':'var(--dim2)');
+    document.getElementById('heroverdict').textContent=
+      Name+' averaged '+_hf(curAvg)+unit+' over the last '+cur.length+' readings, versus '+
+      _hf(prevAvg)+unit+' the '+prev.length+' before (±'+_hf(sd)+unit+' this window).';
+  }else{
+    dEl.textContent='';
+    document.getElementById('heroverdict').textContent=
+      Name+' averaged '+_hf(curAvg)+unit+' over '+cur.length+' readings (±'+_hf(sd)+unit+
+      '). No earlier window to compare against yet.';
+  }
+  var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals);
+  var pad=(hi-lo)*0.12||1; lo-=pad; hi+=pad; var rng=hi-lo;
+  var t0=cur[0][0], t1=cur[cur.length-1][0], tspan=(t1-t0)||1;
+  function X(t){return (t-t0)/tspan*1000;}
+  function Y(v){return 100-(v-lo)/rng*100;}
+  var dline=cur.map(function(p){return X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1);}).join(' ');
+  var roll=[];
+  for(var i2=0;i2<cur.length;i2++){var w=[];for(var j=Math.max(0,i2-6);j<=i2;j++)w.push(cur[j][1]);
+    roll.push(X(cur[i2][0]).toFixed(1)+','+Y(_hmean(w)).toFixed(1));}
+  var yb1=Y(curAvg+sd), yb2=Y(curAvg-sd);
+  var svg='<polygon points="0,100 '+dline+' 1000,100" fill="var(--area)"/>'+
+    '<rect x="0" y="'+Math.min(yb1,yb2).toFixed(1)+'" width="1000" height="'+Math.abs(yb2-yb1).toFixed(1)+'" fill="var(--band)"/>'+
+    '<polyline points="'+roll.join(' ')+'" fill="none" stroke="var(--trend)" stroke-width="1.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>'+
+    '<polyline points="'+dline+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
+  document.getElementById('herosvg').innerHTML=svg;
+  yy[0].textContent=_hf(hi); yy[1].textContent=_hf((hi+lo)/2); yy[2].textContent=_hf(lo);
+  var xax=document.getElementById('heroxax'); xax.innerHTML='';
+  for(var k=0;k<5;k++){var idx=Math.round(k/4*(cur.length-1));
+    var sp=document.createElement('span'); sp.textContent=cur[idx][2].slice(5); xax.appendChild(sp);}
+  if(prevAvg!=null){
+    var plot=document.getElementById('heroplot');
+    var chip=document.createElement('div'); chip.className='prevchip';
+    chip.textContent='prev avg '+_hf(prevAvg);
+    chip.style.top=Math.max(4,Math.min(96,Y(prevAvg)))+'%'; chip.style.right='4px';
+    plot.appendChild(chip);
+  }
+}
 """
 
 
@@ -1009,6 +1098,23 @@ def _performance_tab(b: dict) -> str:
     return f"""
 <div class="tab" id="performance">
   <script>window.PERF={perf_json};window.PERF_INTRADAY={intraday_json};</script>
+  <div class="card hero">
+    <h2>Am I improving?</h2>
+    <div class="metricsel" id="herosel">
+      <button class="on" onclick="heroSelect('hrv',this)">HRV</button>
+      <button onclick="heroSelect('rhr',this)">Resting HR</button>
+      <button onclick="heroSelect('sleep',this)">Sleep</button>
+      <button onclick="heroSelect('tdee',this)">Energy burned</button>
+      <button onclick="heroSelect('weight',this)">Weight</button>
+    </div>
+    <div class="herohead"><span class="heronum" id="heronum">—</span><span class="herounit" id="herounit"></span><span class="herodelta" id="herodelta"></span></div>
+    <div class="heroverdict" id="heroverdict"></div>
+    <div class="perfchart">
+      <div class="perfyax" id="heroyax"><span></span><span></span><span></span></div>
+      <div class="perfplot" id="heroplot"><div class="perfmid"></div><svg id="herosvg" viewBox="0 0 1000 100" preserveAspectRatio="none"></svg></div>
+    </div>
+    <div class="perfxax" id="heroxax"></div>
+  </div>
   <div class="card">
     <h2>Snapshot</h2>
     <div class="row">
