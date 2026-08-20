@@ -169,6 +169,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     }
 
     briefing["overview"] = _overview(days, acts, programmes, st, today)
+    briefing["vitals"] = _vitals(days)
     briefing["training"] = _training(cfg, programmes, st, today)
     _apply_autoregulation(briefing)
     briefing["meals"] = _meals(days, diets, foods, cfg, st, today, measurements)
@@ -630,6 +631,48 @@ def _performance(days, acts, today, cfg_home) -> dict:
              "avg_hr": a.avg_hr, "kcal": a.calories.value if a.calories else None}
             for a in sorted(acts, key=lambda a: a.start, reverse=True)[:12]
         ],
+    }
+
+
+def _vitals(days) -> dict:
+    """Body Battery, sleep score + stages, and HRV status — all already pulled, none
+    shown until now. Reads the most recent non-null value per signal, since the newest
+    day can be mid-collection."""
+    if not days:
+        return {"available": False}
+
+    def latest(getter):
+        for d in reversed(days):
+            v = getter(d)
+            if v is not None:
+                return v, d.on
+        return None, None
+
+    bb_hi, bb_on = latest(lambda d: d.body_battery_high)
+    bb_lo, _ = latest(lambda d: d.body_battery_low)
+    score, score_on = latest(lambda d: d.sleep_score)
+    hrv_status, _ = latest(lambda d: d.hrv_status)
+
+    def secs(v):
+        return v.value if v is not None else None
+
+    # stages come from the same night as the score
+    stages = {"deep": None, "light": None, "rem": None, "awake": None}
+    for d in reversed(days):
+        if d.sleep_score is not None:
+            stages = {"deep": secs(d.sleep_deep_s), "light": secs(d.sleep_light_s),
+                      "rem": secs(d.sleep_rem_s), "awake": secs(d.sleep_awake_s)}
+            break
+
+    if bb_hi is None and score is None and hrv_status is None:
+        return {"available": False}
+    return {
+        "available": True,
+        "body_battery": {"high": bb_hi, "low": bb_lo, "on": bb_on.isoformat() if bb_on else None},
+        "sleep_score": score,
+        "sleep_score_on": score_on.isoformat() if score_on else None,
+        "sleep_stages": stages,
+        "hrv_status": hrv_status,
     }
 
 

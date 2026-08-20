@@ -61,6 +61,11 @@ def _kcal(value: Any) -> Kcal | None:
     return None if n is None else Kcal(n)
 
 
+def _q_secs(v) -> Seconds | None:
+    n = _int(v)
+    return Seconds(n) if n else None
+
+
 def daily_from_payloads(
     on: date,
     summary: dict | None,
@@ -92,6 +97,12 @@ def daily_from_payloads(
             else None
         ),
         weight=Grams(weight_g) if weight_g else None,
+        sleep_deep_s=_q_secs(_get(sleep, "dailySleepDTO", "deepSleepSeconds")),
+        sleep_light_s=_q_secs(_get(sleep, "dailySleepDTO", "lightSleepSeconds")),
+        sleep_rem_s=_q_secs(_get(sleep, "dailySleepDTO", "remSleepSeconds")),
+        sleep_awake_s=_q_secs(_get(sleep, "dailySleepDTO", "awakeSleepSeconds")),
+        sleep_score=_int(_get(sleep, "dailySleepDTO", "sleepScores", "overall", "value")),
+        hrv_status=_get(hrv, "hrvSummary", "status"),
     )
 
 

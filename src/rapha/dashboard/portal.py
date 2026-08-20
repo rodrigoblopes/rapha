@@ -387,6 +387,40 @@ def _stat(n: Any, label: str) -> str:
 
 # ── tabs ─────────────────────────────────────────────────────────────────────
 
+def _vitals_card(v: dict | None) -> str:
+    """Body Battery, sleep score + stages, and HRV status — the overnight detail behind
+    the recovery light, from data the pull already had."""
+    if not v or not v.get("available"):
+        return ""
+
+    def hm(sec):
+        return f"{sec // 3600}h{(sec % 3600) // 60:02d}m" if sec else "—"
+
+    bb = v.get("body_battery", {})
+    bb_stat = (f'{bb.get("low", "—")}–{bb.get("high", "—")}'
+               if bb.get("high") is not None else "—")
+    score = v.get("sleep_score")
+    score_cls = ("good" if score and score >= 80 else
+                 "warn" if score and score >= 60 else "bad" if score else "muted")
+    st = v.get("sleep_stages", {})
+    stage_txt = (f'Deep {hm(st.get("deep"))} · REM {hm(st.get("rem"))} · '
+                 f'Light {hm(st.get("light"))} · Awake {hm(st.get("awake"))}')
+    hrv = v.get("hrv_status")
+    hrv_cls = {"BALANCED": "good", "UNBALANCED": "warn", "LOW": "bad"}.get(hrv, "muted")
+    hrv_txt = hrv.title() if hrv else "—"
+
+    return f"""
+  <div class="card">
+    <h2>Overnight</h2>
+    <div class="row">
+      {_stat(f'<span class="{score_cls}">{score if score is not None else "—"}</span>', "Sleep score")}
+      {_stat(bb_stat, "Body Battery")}
+      {_stat(f'<span class="{hrv_cls}">{_e(hrv_txt)}</span>', "HRV status")}
+    </div>
+    <div class="note">{_e(stage_txt)}</div>
+  </div>"""
+
+
 def _today_tab(b: dict) -> str:
     ov = b["overview"]
     rec = ov["recovery"]
@@ -451,6 +485,7 @@ def _today_tab(b: dict) -> str:
     <div class="pill {rec['status']}">{_recovery_emoji(rec['status'])} {_e(rec['headline'])}</div>
     <div style="margin-top:14px">{sig_rows}</div>
   </div>
+  {_vitals_card(b.get("vitals"))}
   {switch_banner}
   {coach_card}
   <div class="row">

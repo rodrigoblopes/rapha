@@ -38,7 +38,13 @@ CREATE TABLE IF NOT EXISTS daily_metrics (
     body_battery_high  INTEGER,
     body_battery_low   INTEGER,
     vo2max_x10         INTEGER,
-    weight_g           INTEGER
+    weight_g           INTEGER,
+    sleep_deep_s       INTEGER,
+    sleep_light_s      INTEGER,
+    sleep_rem_s        INTEGER,
+    sleep_awake_s      INTEGER,
+    sleep_score        INTEGER,
+    hrv_status         TEXT
 );
 
 CREATE TABLE IF NOT EXISTS activities (
@@ -76,6 +82,12 @@ CREATE TABLE IF NOT EXISTS measurements (
 #: Columns added after the table first shipped. SQLite has no "ADD COLUMN IF NOT
 #: EXISTS", so we diff against PRAGMA table_info and add what's missing — existing
 #: databases gain the new measurement fields without a manual migration.
+_DAILY_COLUMNS = {
+    "sleep_deep_s": "INTEGER", "sleep_light_s": "INTEGER",
+    "sleep_rem_s": "INTEGER", "sleep_awake_s": "INTEGER",
+    "sleep_score": "INTEGER", "hrv_status": "TEXT",
+}
+
 _MEASUREMENT_COLUMNS = {
     "chest_mm": "INTEGER", "arm_mm": "INTEGER", "thigh_mm": "INTEGER",
     "shoulders_mm": "INTEGER", "calf_mm": "INTEGER", "wingspan_mm": "INTEGER",
@@ -112,6 +124,18 @@ class Store:
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(SCHEMA)
         self._migrate_measurements()
+        self._migrate_daily()
+
+    def _migrate_daily(self) -> None:
+        """Add later daily-metrics columns to a DB created before them (same
+        PRAGMA-diff approach as the measurements table)."""
+        have = {r['name'] for r in
+                self._conn.execute("PRAGMA table_info(daily_metrics)").fetchall()}
+        for col, coltype in _DAILY_COLUMNS.items():
+            if col not in have:
+                self._conn.execute(
+                    f"ALTER TABLE daily_metrics ADD COLUMN {col} {coltype}"
+                )
 
     def _migrate_measurements(self) -> None:
         have = {r["name"] for r in
@@ -164,8 +188,10 @@ class Store:
                 """INSERT INTO daily_metrics (
                        on_date, source, resting_hr, hrv_ms, sleep_s, steps,
                        calories_total, calories_active, stress_avg,
-                       body_battery_high, body_battery_low, vo2max_x10, weight_g
-                   ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                       body_battery_high, body_battery_low, vo2max_x10, weight_g,
+                       sleep_deep_s, sleep_light_s, sleep_rem_s, sleep_awake_s,
+                       sleep_score, hrv_status
+                   ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 [
                     (
                         r.on.isoformat(),
@@ -181,6 +207,12 @@ class Store:
                         r.body_battery_low,
                         r.vo2max_x10,
                         _v(r.weight),
+                        _v(r.sleep_deep_s),
+                        _v(r.sleep_light_s),
+                        _v(r.sleep_rem_s),
+                        _v(r.sleep_awake_s),
+                        r.sleep_score,
+                        r.hrv_status,
                     )
                     for r in rows
                 ],
@@ -269,6 +301,12 @@ class Store:
                 body_battery_low=r["body_battery_low"],
                 vo2max_x10=r["vo2max_x10"],
                 weight=_q(Grams, r["weight_g"]),
+                sleep_deep_s=_q(Seconds, r["sleep_deep_s"]),
+                sleep_light_s=_q(Seconds, r["sleep_light_s"]),
+                sleep_rem_s=_q(Seconds, r["sleep_rem_s"]),
+                sleep_awake_s=_q(Seconds, r["sleep_awake_s"]),
+                sleep_score=r["sleep_score"],
+                hrv_status=r["hrv_status"],
             )
             for r in rows
         ]

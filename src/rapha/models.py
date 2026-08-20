@@ -50,6 +50,15 @@ class DailyMetrics:
     body_battery_low: int | None = None
     vo2max_x10: int | None = None
     weight: Grams | None = None
+    #: Sleep broken into stages (seconds) + Garmin's 0–100 sleep score, and the
+    #: overnight HRV *status* (BALANCED/UNBALANCED/LOW) — richer than the single
+    #: HRV average, and already inside the payloads the pull fetches.
+    sleep_deep_s: Seconds | None = None
+    sleep_light_s: Seconds | None = None
+    sleep_rem_s: Seconds | None = None
+    sleep_awake_s: Seconds | None = None
+    sleep_score: int | None = None
+    hrv_status: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
