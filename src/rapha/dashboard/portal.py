@@ -312,7 +312,7 @@ function perfRange(tf, btn){
 function _drawIntraday(){
   const el=document.getElementById('intraday-hr'); if(!el) return;
   const hr=((window.PERF_INTRADAY||{}).hr)||[];
-  _drawLine(el, hr, 'var(--red)');
+  _drawLine(el, hr, 'var(--bad)');
 }
 function toggleMeasForm(btn){
   const f=document.getElementById('measform');
@@ -359,7 +359,7 @@ function _fmtAge(sec){
 function _applyStatus(st){
   const freshMin=st.fresh_minutes||60, age=st.age_seconds;
   const fresh=(age!=null)&&(age<freshMin*60);
-  const col=fresh?'var(--accent)':'var(--red)';
+  const col=fresh?'var(--accent)':'var(--bad)';
   ['navdot','statusdot'].forEach(function(id){
     const e=document.getElementById(id); if(e) e.style.background=col; });
   const navbtn=document.getElementById('tab-datastatus');
@@ -379,7 +379,7 @@ function _applyStatus(st){
   const cs=document.getElementById('chromestate');
   if(cs&&st.chrome_up!=null){ cs.innerHTML=st.chrome_up
     ?'<span style="color:var(--accent)">\\u25cf</span> A Garmin browser session is open \\u2014 a pull can run.'
-    :'<span style="color:var(--red)">\\u25cf</span> No browser session detected. Open one below so pulls can run.'; }
+    :'<span style="color:var(--bad)">\\u25cf</span> No browser session detected. Open one below so pulls can run.'; }
 }
 async function refreshStatus(){
   try{ const r=await fetch('/pull-status',{cache:'no-store'});
@@ -535,6 +535,20 @@ def _vitals_card(v: dict | None) -> str:
     hrv_cls = {"BALANCED": "good", "UNBALANCED": "warn", "LOW": "bad"}.get(hrv, "muted")
     hrv_txt = hrv.title() if hrv else "—"
 
+    # Sleep stages as a single proportional bar, labels in a SEPARATE legend below —
+    # a short stage would clip its own label if the text sat inside the column (README).
+    stages = [("deep", "stage-deep", st.get("deep")), ("rem", "stage-rem", st.get("rem")),
+              ("light", "stage-light", st.get("light")), ("awake", "stage-awake", st.get("awake"))]
+    total = sum(sec for _, _, sec in stages if sec)
+    if total:
+        segs = "".join(f'<div class="stageseg {cls}" style="width:{sec / total * 100:.2f}%"></div>'
+                       for _, cls, sec in stages if sec)
+        legend = "".join(f'<span><i class="{cls}"></i>{name} {hm(sec)}</span>'
+                         for name, cls, sec in stages if sec)
+        stage_html = f'<div class="stagebar">{segs}</div><div class="stagelegend">{legend}</div>'
+    else:
+        stage_html = f'<div class="note">{_e(stage_txt)}</div>'
+
     return f"""
   <div class="card">
     <h2>Overnight</h2>
@@ -543,7 +557,7 @@ def _vitals_card(v: dict | None) -> str:
       {_stat(bb_stat, "Body Battery")}
       {_stat(hrv_txt, "HRV status", hrv_cls)}
     </div>
-    <div class="note">{_e(stage_txt)}</div>
+    {stage_html}
   </div>"""
 
 
@@ -644,7 +658,7 @@ def _today_tab(b: dict) -> str:
         d = sw["days_until"]
         when = ("today" if d <= 0 else "tomorrow" if d == 1 else f"in {d} days")
         switch_banner = (
-            '<div class="card" style="border-left:3px solid var(--cyan)">'
+            '<div class="card" style="border-left:3px solid var(--accent2)">'
             '<h2>Programme update</h2>'
             f'<div>Your training sheet advances to <strong>Sheet {_e(sw["sheet"])}</strong> '
             f'{when} — week {_e(sw["starts_week"])}, {_e(sw["starts_on"])}. The portal '
@@ -655,12 +669,17 @@ def _today_tab(b: dict) -> str:
         sheet_line = (f'<div class="note">Sheet {_e(ov["sheet_number"])} · '
                       f'week {_e(ov["week"])} of 8</div>')
 
+    rec_cls = {"green": "good", "amber": "warn", "red": "bad"}.get(rec["status"], "muted")
     return f"""
 <div class="tab on" id="today">
-  <div class="card">
-    <h2>Today · Day {ov["day_of_60"]} of 60</h2>
-    <div class="pill {rec['status']}">{_recovery_emoji(rec['status'])} {_e(rec['headline'])}</div>
-    <div style="margin-top:14px">{sig_rows}</div>
+  <div class="card hero">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:clamp(16px,2.4vw,32px)">
+      <div>
+        <h2>Recovery</h2>
+        <div class="big {rec_cls}">{_e(rec['headline'])}</div>
+      </div>
+      <div>{sig_rows}</div>
+    </div>
   </div>
   {_vitals_card(b.get("vitals"))}
   {switch_banner}
@@ -1065,7 +1084,7 @@ def _progression_card(pg: dict) -> str:
         elif t > 0:
             trend = f'<span style="color:var(--accent)">▲ +{_e(t)} kg</span>'
         elif t < 0:
-            trend = f'<span style="color:var(--amber)">▼ {_e(t)} kg</span>'
+            trend = f'<span style="color:var(--accent)">▼ {_e(t)} kg</span>'
         else:
             trend = '<span style="color:var(--dim)">→ held</span>'
         spark = _spark(e.get("series", []), w=120, h=28) if len(e.get("series", [])) > 1 else ""
@@ -1101,7 +1120,7 @@ def _photo_analysis_html(analysis: dict | None) -> str:
     body = f'<p style="margin:0 0 8px"><strong>{_e(analysis.get("headline",""))}</strong></p>'
     body += "".join(f'<p style="margin:0 0 8px">{_e(p)}</p>'
                     for p in analysis.get("paragraphs", []))
-    return (f'<div class="card" style="background:var(--card2);border-left:3px solid '
+    return (f'<div class="card" style="background:var(--inset);border-left:3px solid '
             f'var(--accent);margin:6px 0 12px">{body}</div>')
 
 
@@ -1143,7 +1162,7 @@ def _measurements_card(pr: dict) -> str:
             col, arrow = "var(--dim)", "→"
         else:
             good = (d < 0) if drop_good else (d > 0)
-            col = "var(--accent)" if good else "var(--amber)"
+            col = "var(--accent)" if good else "var(--accent2)"
             arrow = "▼" if d < 0 else "▲"
         change_html += (
             f'<span class="tag" style="color:{col}">{_e(c["label"])} '
@@ -1243,7 +1262,7 @@ def _data_status_tab(b: dict) -> str:
     s = ds.get("summary") or {}
     # Initial dot from the build; JS makes it live against the clock + a port probe.
     fresh = ds.get("fresh")
-    init_col = "var(--accent)" if fresh else "var(--red)"
+    init_col = "var(--accent)" if fresh else "var(--bad)"
     summary_html = ""
     if s:
         bits = [
@@ -1273,7 +1292,7 @@ def _data_status_tab(b: dict) -> str:
     {f'<div class="note">Last pull brought in: {_e(summary_html)}</div>' if summary_html else ''}
     <button class="copy" style="margin-top:10px" onclick="forcePull(this)">Pull now</button>
     <span class="note" id="pullnowstatus" style="margin-left:10px"></span>
-    <div class="note">The dot turns <span style="color:var(--red)">red</span> once a pull
+    <div class="note">The dot turns <span style="color:var(--bad)">red</span> once a pull
       is more than {ds.get("fresh_minutes", 60)} minutes old, and
       <span style="color:var(--accent)">green</span> while it's fresh. "Pull now" runs
       the same job immediately — it needs the browser session below to be open.</div>
