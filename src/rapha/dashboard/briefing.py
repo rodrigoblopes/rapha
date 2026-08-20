@@ -178,7 +178,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     briefing["progression"] = _progression(cfg)
     briefing["progress"] = _progress(days, st, cfg, today, weight_hist, measurements)
     briefing["data_status"] = _data_status(cfg)
-    briefing["coach"] = _coach(briefing, today)
+    briefing["coach"] = _coach(cfg, briefing, today)
     return briefing
 
 
@@ -193,7 +193,31 @@ def _data_status(cfg) -> dict:
     return pull_status(cfg.home, check_chrome=False)
 
 
-def _coach(b: dict, today: date) -> dict:
+def _coach_note(cfg, today) -> dict | None:
+    """A Claude-authored daily coach note, if one has been written to %RAPHA_HOME%/coach.md.
+
+    The templated paragraphs are always computed as the fresh fallback; this lets a note
+    written *from the same briefing numbers* (the way the photo analysis already works)
+    take the lead when it is current. Freshness is the file's own date — a note more than
+    a day old is shown, but flagged, never presented as today's read.
+    """
+    from datetime import datetime
+
+    path = cfg.home / "coach.md"
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not text:
+        return None
+    written = datetime.fromtimestamp(path.stat().st_mtime).date()
+    return {"text": text, "written": written.isoformat(),
+            "fresh": (today - written).days <= 1}
+
+
+def _coach(cfg, b: dict, today: date) -> dict:
     """A plain-language daily read, written the way a trainer would talk to you.
 
     Everything on the dashboard is a number; this turns the numbers that matter
@@ -273,7 +297,8 @@ def _coach(b: dict, today: date) -> dict:
             "exercises, laid out on the Training tab and ready to send to your watch."
         )
 
-    return {"day": ov["day_of_60"], "status": status, "paragraphs": paras}
+    return {"day": ov["day_of_60"], "status": status, "paragraphs": paras,
+            "authored": _coach_note(cfg, today)}
 
 
 def _recent_weight(days) -> Grams | None:

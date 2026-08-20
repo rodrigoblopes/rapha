@@ -421,6 +421,65 @@ def _vitals_card(v: dict | None) -> str:
   </div>"""
 
 
+def _bold(escaped: str) -> str:
+    """`**x**` -> bold, on already-escaped text (no regex, no backslash escapes)."""
+    parts = escaped.split("**")
+    return "".join(seg if i % 2 == 0 else f"<strong>{seg}</strong>"
+                   for i, seg in enumerate(parts))
+
+
+def _md_lite(text: str) -> str:
+    """Minimal markdown for a coach note: paragraphs, bold, headings, - bullets. Escaped
+    first, so the note is never markup injection even though Claude authored it."""
+    out = []
+    for block in text.strip().split(chr(10) * 2):
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        if not lines:
+            continue
+        if all(ln.startswith(("-", "*")) for ln in lines):
+            items = "".join(f"<li>{_bold(_e(ln[1:].strip()))}</li>" for ln in lines)
+            out.append(f'<ul style="margin:0 0 10px;padding-left:18px">{items}</ul>')
+        elif lines[0].startswith("#"):
+            out.append(f'<h3 style="margin:2px 0 8px">'
+                       f'{_bold(_e(lines[0].lstrip("#").strip()))}</h3>')
+        else:
+            out.append(f'<p style="margin:0 0 10px">{_bold(_e(" ".join(lines)))}</p>')
+    return "".join(out)
+
+
+def _coach_card(coach: dict) -> str:
+    """The daily coach read. A fresh Claude-authored note leads; otherwise the always-
+    fresh templated paragraphs stand in, so the card is never empty or stale-by-surprise."""
+    authored = coach.get("authored")
+    if authored and authored.get("fresh"):
+        body = _md_lite(authored["text"])
+        return f"""
+  <div class="card" style="border-left:3px solid var(--accent)">
+    <h2>Your day, in plain terms</h2>
+    {body}
+    <div class="note">Written by Claude from today’s numbers — an observation, not
+      a medical opinion. Every call is yours.</div>
+  </div>"""
+
+    paras = "".join(f'<p style="margin:0 0 10px">{_e(p)}</p>'
+                    for p in coach.get("paragraphs", []))
+    if not paras:
+        return ""
+    stale = ""
+    if authored and not authored.get("fresh"):
+        stale = (f'<div class="note">A written coach note from {_e(authored["written"])} '
+                 "is on file but out of date — showing today’s computed read "
+                 "instead.</div>")
+    return f"""
+  <div class="card" style="border-left:3px solid var(--accent)">
+    <h2>Your day, in plain terms</h2>
+    {paras}
+    {stale}
+    <div class="note">Written from today’s numbers — an observation, not a medical
+      opinion. Every call is yours.</div>
+  </div>"""
+
+
 def _today_tab(b: dict) -> str:
     ov = b["overview"]
     rec = ov["recovery"]
@@ -451,15 +510,7 @@ def _today_tab(b: dict) -> str:
     )
 
     coach = b.get("coach", {})
-    coach_paras = "".join(f'<p style="margin:0 0 10px">{_e(p)}</p>'
-                          for p in coach.get("paragraphs", []))
-    coach_card = (f"""
-  <div class="card" style="border-left:3px solid var(--accent)">
-    <h2>Your day, in plain terms</h2>
-    {coach_paras}
-    <div class="note">Written from today's numbers — an observation, not a medical opinion.
-      Every call is yours.</div>
-  </div>""" if coach_paras else "")
+    coach_card = _coach_card(coach)
 
     sw = ov.get("sheet_switch")
     switch_banner = ""

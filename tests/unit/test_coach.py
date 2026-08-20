@@ -1,64 +1,43 @@
-"""The plain-language daily coach summary. Built from invented state only."""
+"""The Claude-authored coach note: markdown rendering + freshness override."""
 
-from __future__ import annotations
-
+import os
 from datetime import date
+from types import SimpleNamespace
 
-from rapha.dashboard.briefing import _coach
-
-
-def _state(status="green", off_labels=(), rate=-0.5, target=2200, protein=160,
-           rest=False, focus="Peito"):
-    signals = [
-        {"label": "HRV", "good": True, "higher_is_better": True},
-        {"label": "Resting HR", "good": True, "higher_is_better": False},
-    ]
-    for lbl in off_labels:
-        signals.append({"label": lbl, "good": False, "higher_is_better": True})
-    return {
-        "overview": {"day_of_60": 22, "recovery": {"status": status, "signals": signals}},
-        "meals": {"target_kcal": target, "protein_g": protein},
-        "training": {"rest": rest, "focus": focus, "exercises": [1, 2, 3]},
-        "progress": {"weight_view": {"rate_kg_per_week": rate}},
-    }
+from rapha.dashboard.briefing import _coach_note
+from rapha.dashboard.portal import _bold, _md_lite
 
 
-def _text(state):
-    return " ".join(_coach(state, date(2026, 8, 13))["paragraphs"]).lower()
+class TestMarkdownLite:
+    def test_bold_wraps_double_star(self):
+        assert _bold("try 100 **kg** now") == "try 100 <strong>kg</strong> now"
+
+    def test_paragraphs_and_bullets(self):
+        html = _md_lite("Line one.\n\n- a\n- b")
+        assert "<p" in html and "<ul" in html and html.count("<li>") == 2
+
+    def test_bold_is_balanced_when_stars_are_odd(self):
+        # A stray ** should not crash or swallow the rest of the note.
+        assert "<strong>" in _bold("a **b** c **d** e")
 
 
-def test_green_reads_as_ready_to_train():
-    assert "well recovered" in _text(_state(status="green"))
+class TestCoachNoteFreshness:
+    def _cfg(self, tmp_path):
+        return SimpleNamespace(home=tmp_path)
 
+    def test_absent_file_is_none(self, tmp_path):
+        assert _coach_note(self._cfg(tmp_path), date(2026, 8, 20)) is None
 
-def test_amber_names_the_off_signal():
-    txt = _text(_state(status="amber", off_labels=["Sleep"]))
-    assert "sleep" in txt and "leave a rep" in txt
+    def test_todays_note_is_fresh(self, tmp_path):
+        (tmp_path / "coach.md").write_text("Train hard.", encoding="utf-8")
+        note = _coach_note(self._cfg(tmp_path), date.today())
+        assert note is not None and note["fresh"] is True
 
-
-def test_red_advises_toward_rest():
-    assert "rest" in _text(_state(status="red"))
-
-
-def test_a_cut_is_described_as_controlled_loss():
-    assert "trending down" in _text(_state(rate=-0.5))
-
-
-def test_a_gain_is_flagged_when_cutting():
-    assert "trending up" in _text(_state(rate=0.4))
-
-
-def test_protein_is_always_called_out():
-    assert "protein" in _text(_state(protein=158))
-
-
-def test_a_rest_day_is_explained_not_left_blank():
-    assert "rest day" in _text(_state(rest=True))
-
-
-def test_it_survives_missing_sections():
-    # No weight view, no meals — must not raise, must still say something.
-    out = _coach({"overview": {"day_of_60": 1,
-                               "recovery": {"status": "green", "signals": []}}},
-                 date(2026, 8, 13))
-    assert out["paragraphs"]
+    def test_an_old_note_is_read_but_not_fresh(self, tmp_path):
+        f = tmp_path / "coach.md"
+        f.write_text("Old advice.", encoding="utf-8")
+        old = date(2000, 1, 1)
+        ts = __import__("time").mktime(old.timetuple())
+        os.utime(f, (ts, ts))
+        note = _coach_note(self._cfg(tmp_path), date.today())
+        assert note is not None and note["fresh"] is False
