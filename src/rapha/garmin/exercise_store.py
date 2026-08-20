@@ -213,6 +213,13 @@ class ExerciseStore:
         ).fetchall()
         return [(r["reps"], r["weight_g"]) for r in rows]
 
+    def all_sets(self) -> list[SetRow]:
+        """Every stored working set, oldest first — the raw feed for volume/tonnage."""
+        rows = self._conn.execute(
+            "SELECT * FROM exercise_sets ORDER BY on_date, activity_id, set_index"
+        ).fetchall()
+        return [_row(r) for r in rows]
+
     def exercises(self) -> list[ExerciseSummary]:
         """Every movement seen, once, with its session count and latest date."""
         rows = self._conn.execute(

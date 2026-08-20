@@ -172,6 +172,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     briefing["training"] = _training(cfg, programmes, st, today)
     briefing["meals"] = _meals(days, diets, foods, cfg, st, today, measurements)
     briefing["performance"] = _performance(days, acts, today, cfg.home)
+    briefing["volume"] = _volume(cfg, acts, programmes, st, today)
     briefing["progression"] = _progression(cfg)
     briefing["progress"] = _progress(days, st, cfg, today, weight_hist, measurements)
     briefing["data_status"] = _data_status(cfg)
@@ -628,6 +629,96 @@ def _performance(days, acts, today, cfg_home) -> dict:
              "avg_hr": a.avg_hr, "kcal": a.calories.value if a.calories else None}
             for a in sorted(acts, key=lambda a: a.start, reverse=True)[:12]
         ],
+    }
+
+
+def _cycle_shape(sheet) -> tuple[int, int]:
+    """(cycle_length, training-days-per-cycle) for a sheet — e.g. (5, 4) for 4-on-1-off."""
+    rotation = {e["day"]: e for e in sheet.get("rotation", [])}
+    sessions = {s["day"]: s for s in sheet.get("sessions", [])}
+    restart = next((d for d, e in rotation.items() if e.get("restarts_cycle")), None)
+    highest = max([*sessions, *rotation], default=1)
+    cyc_len = (restart - 1) if restart else highest
+    train = sum(1 for d, ses in sessions.items()
+                if d <= cyc_len and (ses.get("exercises") if "exercises" in ses else True))
+    return max(cyc_len, 1), max(train, 1)
+
+
+def _volume(cfg, acts, programmes, st, today) -> dict:
+    """Weekly tonnage + hard sets, and adherence of scheduled vs actually-trained days.
+
+    The two questions a progress block turns on: am I moving more total load over time,
+    and am I actually showing up for the sessions the protocol asked for. Both read the
+    data already stored — per-set loads and logged strength activities.
+    """
+    from ..rules.volume import trend, weekly_volume
+
+    out: dict = {"available": False}
+    if not cfg.db_path.is_file():
+        return out
+
+    from ..garmin.exercise_store import ExerciseStore
+
+    with ExerciseStore(cfg.db_path) as es:
+        rows = es.all_sets()
+    sets = [(r.on, r.reps, r.weight_g, r.category) for r in rows]
+    series = weekly_volume(sets, weeks=12, today=today)
+    if not series:
+        return out
+
+    latest = series[-1]
+    return {
+        "available": True,
+        "weeks": [{"start": w.week_start.isoformat(), "tonnage_kg": w.tonnage_kg,
+                   "hard_sets": w.hard_sets, "sessions": w.sessions} for w in series],
+        "trend_kg": trend(series),
+        "this_week": {"tonnage_kg": latest.tonnage_kg, "hard_sets": latest.hard_sets,
+                      "sessions": latest.sessions},
+        "adherence": _adherence(acts, series, programmes, st, today),
+    }
+
+
+def _adherence(acts, series, programmes, st, today, *, window: int = 28) -> dict:
+    """Sessions actually trained vs the protocol's expectation over ``window`` days.
+
+    Expectation is derived from the sheet's own shape (training days per cycle), not a
+    guess. ``streak`` is the run of consecutive recent weeks that met a sensible weekly
+    minimum — read straight from the weekly session counts, so it survives the rolling
+    rest day that a fixed-weekday streak would trip over.
+    """
+    sheet = _live_sheet(programmes, st, today)
+    if not sheet:
+        return {"available": False}
+    cyc_len, train_per_cycle = _cycle_shape(sheet)
+    per_week = train_per_cycle / cyc_len * 7
+    expected = round(window / cyc_len * train_per_cycle)
+
+    trained = sorted({a.start.date() for a in acts
+                      if "strength" in (a.kind or "").lower()
+                      and (today - a.start.date()).days < window})
+    done = len(trained)
+    last = max(trained) if trained else None
+
+    # A week is "met" at the protocol's pace less a couple of allowed misses. The
+    # current (partial) week is excluded — it is not over, so it cannot break a streak.
+    threshold = max(3, round(per_week) - 2)
+    streak = 0
+    for w in reversed(series[:-1]):           # newest COMPLETED week first
+        if w.sessions >= threshold:
+            streak += 1
+        else:
+            break
+
+    return {
+        "available": True,
+        "window_days": window,
+        "expected": expected,
+        "done": done,
+        "rate": round(done / expected, 2) if expected else None,
+        "streak_weeks": streak,
+        "week_threshold": threshold,
+        "days_since_last": (today - last).days if last else None,
+        "last_trained": last.isoformat() if last else None,
     }
 
 

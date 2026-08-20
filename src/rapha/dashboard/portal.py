@@ -93,6 +93,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 .ex .rt{color:var(--dim);font-size:12px;white-space:nowrap}
 .note{color:var(--dim);font-size:13px;line-height:1.6;margin-top:8px}
 .callrow{margin-top:6px;font-size:13px;line-height:1.5}.callrow strong{padding:2px 8px;border-radius:6px;font-size:13px}.callrow.good strong{background:rgba(60,200,120,.16);color:var(--good)}.callrow.warn strong{background:rgba(230,180,60,.16);color:var(--warn)}.callrow.muted strong{background:rgba(140,150,160,.16);color:var(--dim)}.callrow .why{display:block;color:var(--dim);font-size:11px;margin-top:3px}
+.vbars{display:flex;gap:5px;align-items:flex-end;height:64px;margin:14px 0 4px}.vbar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}.vfill{width:70%;background:var(--cyan);border-radius:3px 3px 0 0;min-height:2px}.vlbl{font-size:9px;color:var(--dim);margin-top:3px;white-space:nowrap}
 .gsheet{background:var(--card2);border:1px dashed var(--line);border-radius:11px;padding:14px;
   font:13px/1.7 ui-monospace,"SF Mono",Menlo,monospace;white-space:pre-wrap;overflow-x:auto}
 .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
@@ -620,6 +621,60 @@ _PERF_METRICS = [
 ]
 
 
+def _volume_card(v: dict) -> str:
+    """Weekly tonnage bars + hard sets, and the adherence line — the 'more work over
+    time' signal and the 'am I showing up' signal, side by side."""
+    if not v.get("available"):
+        return ""
+    weeks = v.get("weeks", [])
+    tvals = [w["tonnage_kg"] for w in weeks]
+    peak = max(tvals) if tvals else 0
+    bars = ""
+    for w in weeks:
+        h = int(round((w["tonnage_kg"] / peak) * 46)) if peak else 0
+        lbl = w["start"][5:]
+        bars += (f'<div class="vbar" title="{lbl}: {w["tonnage_kg"]:g} kg · '
+                 f'{w["hard_sets"]} hard sets · {w["sessions"]} sessions">'
+                 f'<div class="vfill" style="height:{h}px"></div>'
+                 f'<div class="vlbl">{_e(lbl)}</div></div>')
+    tw = v.get("this_week", {})
+    tr = v.get("trend_kg")
+    trend_txt = ("—" if tr is None
+                 else f'{"+" if tr >= 0 else ""}{round(tr/1000, 1)} t vs 12 wks ago')
+
+    a = v.get("adherence", {})
+    adh = ""
+    if a.get("available"):
+        rate = a.get("rate")
+        rate_pct = f'{round(rate * 100)}%' if rate is not None else "—"
+        since = a.get("days_since_last")
+        since_txt = ("trained today" if since == 0
+                     else f'{since} d since last' if since is not None else "—")
+        adh = (
+            '<div class="row" style="margin-top:12px">'
+            f'{_stat(f"{a.get('done',0)}/{a.get('expected',0)}", "Sessions (4wk)")}'
+            f'{_stat(rate_pct, "Adherence")}'
+            f'{_stat(a.get("streak_weeks", 0), "Week streak")}'
+            f'{_stat(since_txt, "Last session")}'
+            '</div>')
+
+    return f"""
+  <div class="card">
+    <h2>Volume &amp; adherence</h2>
+    <div class="row">
+      {_stat(f'{tw.get("tonnage_kg", 0):g} kg', "Tonnage this week")}
+      {_stat(tw.get("hard_sets", 0), "Hard sets")}
+      {_stat(tw.get("sessions", 0), "Sessions")}
+      {_stat(trend_txt, "Trend")}
+    </div>
+    <div class="vbars">{bars}</div>
+    <div class="note">Weekly tonnage (reps × load). The compounding currency of a
+      recomposition block — a rising line is real progress no single session shows.
+      Hard sets are working sets taken at a real load.</div>
+    {adh}
+  </div>"""
+
+
 def _performance_tab(b: dict) -> str:
     import json as _json
 
@@ -674,6 +729,7 @@ def _performance_tab(b: dict) -> str:
       {_stat(p.get("typical_train_time","—"), "Usual start")}
     </div>
   </div>
+  {_volume_card(b.get("volume", {}))}
   {_intraday_card(p.get("intraday"))}
   <div class="card" style="position:sticky;top:0;z-index:5">
     <h2>Trends over time</h2>
