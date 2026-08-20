@@ -382,8 +382,9 @@ def _weight_chart(wv: dict, *, w=560, h=130) -> str:
     )
 
 
-def _stat(n: Any, label: str) -> str:
-    return f'<div class="stat"><div class="n">{_e(n)}</div><div class="l">{_e(label)}</div></div>'
+def _stat(n: Any, label: str, cls: str = "") -> str:
+    ncls = f"n {cls}".strip()
+    return f'<div class="stat"><div class="{ncls}">{_e(n)}</div><div class="l">{_e(label)}</div></div>'
 
 
 # ── tabs ─────────────────────────────────────────────────────────────────────
@@ -414,9 +415,9 @@ def _vitals_card(v: dict | None) -> str:
   <div class="card">
     <h2>Overnight</h2>
     <div class="row">
-      {_stat(f'<span class="{score_cls}">{score if score is not None else "—"}</span>', "Sleep score")}
+      {_stat(score if score is not None else "—", "Sleep score", score_cls)}
       {_stat(bb_stat, "Body Battery")}
-      {_stat(f'<span class="{hrv_cls}">{_e(hrv_txt)}</span>', "HRV status")}
+      {_stat(hrv_txt, "HRV status", hrv_cls)}
     </div>
     <div class="note">{_e(stage_txt)}</div>
   </div>"""
@@ -753,10 +754,10 @@ def _load_card(lb: dict | None) -> str:
   <div class="card">
     <h2>Load balance</h2>
     <div class="row">
-      {_stat(f'<span class="{cls}">{ratio:g}</span>', "Acute : chronic")}
+      {_stat(f"{ratio:g}", "Acute : chronic", cls)}
       {_stat(lb.get("acute", 0), "This week (load)")}
       {_stat(lb.get("chronic_weekly", 0), "4-wk weekly avg")}
-      {_stat(f'<span class="{cls}">{text}</span>', "Reading")}
+      {_stat(text, "Reading", cls)}
     </div>
     <div class="note">This week's training load against the four-week average you've built
       a base for. Around 0.8–1.3 is the sweet spot where fitness rises without the injury
