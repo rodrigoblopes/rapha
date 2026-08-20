@@ -481,5 +481,6 @@ then 2×12) is one `RepeatGroupDTO`, and the rest step lives *inside* the iterat
 follows every set — including the last, which is the gap before the next exercise. Two live-verified
 schema facts made this work: the reps end-condition is `conditionTypeId` **10** (`3` is *distance* —
 a latent bug in `workout.py` that never bit only because we had defaulted to lap-button), and a
-repeat is `stepTypeId` 6 with an `iterations` (`conditionTypeId` 7) end-condition. Garmin stores the
-rest step back as a `recovery` step — its term for rest in strength — which is expected.
+repeat is `stepTypeId` 6 with an `iterations` (`conditionTypeId` 7) end-condition.
+
+**Rest is `stepTypeId` 5, not 4 (corrected after an on-watch test).** The first Sheet-02 push emitted rest on `stepTypeId` 4, and we wrote here that Garmin's returning it as a `recovery` step was "expected". It was not — id 4 *is* `recovery`, an active interval; a between-sets rest is id **5** (`rest`). The mislabel made the watch run each session as an interval workout rather than a set-based strength one, with two visible symptoms the user caught in the gym: no per-set reps+weight confirmation screen, and an active-elapsed display instead of the big rest countdown (the timer still buzzed at the end). Verified live and against the reverse-engineered strength API (`n1t3k/garmin-strength-api`): warmup 1, cooldown 2, interval 3, recovery 4, rest 5, repeat 6. A test now pins the rest **id**, not just its key — the old test checked only the key, which was already `"rest"` on the wrong id. Working sets keep the reps end-condition (`conditionTypeId` 10) and carry no target weight yet; the reference also allows a `weightValue`/`weightUnit` pair, the next lever if the per-set weight prompt still needs coaxing.
