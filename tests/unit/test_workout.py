@@ -91,6 +91,15 @@ class TestBuildWorkout:
             assert kinds == ["interval", "rest"]
             assert block["workoutSteps"][1]["endConditionValue"] == 90
 
+    def test_rest_step_is_id_5_not_recovery_so_the_watch_runs_it_as_strength(self):
+        # Garmin's stepTypeId 4 is "recovery" (an active interval) and 5 is "rest".
+        # We shipped rest on 4, so the watch ran the session as intervals: no per-set
+        # reps+weight logging and no rest countdown. The id — not just the key — must be 5.
+        steps = build_workout(PYRAMID, name="x").payload["workoutSegments"][0]["workoutSteps"]
+        rest = steps[0]["workoutSteps"][1]
+        assert rest["stepType"]["stepTypeId"] == 5
+        assert rest["stepType"]["stepTypeKey"] == "rest"
+
     def test_reps_use_the_correct_reps_condition_not_distance(self):
         result = build_workout(SESSION, name="x", strategy=RepStrategy.REPS)
         first = result.payload["workoutSegments"][0]["workoutSteps"][0]

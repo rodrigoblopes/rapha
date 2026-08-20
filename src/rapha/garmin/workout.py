@@ -30,11 +30,17 @@ from ..mapping.exercises import UnmappedExercise, map_exercise
 
 SPORT_STRENGTH = {"sportTypeId": 5, "sportTypeKey": "strength_training"}
 
+# ⚠️ Garmin's stepType ids, verified live and against the reverse-engineered strength
+# API: rest is 5, recovery is 4. We had rest on 4 — so every between-sets break was
+# stored as a "recovery" (active-interval) step. That made the watch run the session
+# as an interval workout, not a set-based strength one: no per-set reps+weight logging
+# screen, and an active-time display instead of the big rest countdown. rest MUST be 5.
 _STEP_TYPES = {
     "warmup": {"stepTypeId": 1, "stepTypeKey": "warmup"},
+    "cooldown": {"stepTypeId": 2, "stepTypeKey": "cooldown"},
     "interval": {"stepTypeId": 3, "stepTypeKey": "interval"},
-    "rest": {"stepTypeId": 4, "stepTypeKey": "rest"},
-    "cooldown": {"stepTypeId": 5, "stepTypeKey": "cooldown"},
+    "recovery": {"stepTypeId": 4, "stepTypeKey": "recovery"},
+    "rest": {"stepTypeId": 5, "stepTypeKey": "rest"},
     "repeat": {"stepTypeId": 6, "stepTypeKey": "repeat"},
 }
 
