@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: oklch(0.968 0.008 85); --panel: oklch(0.995 0.004 90); --inset: oklch(0.975 0.008 85);
+    --stripe: oklch(0.93 0.008 82); --line: oklch(0.88 0.010 80); --line2: oklch(0.90 0.010 80);
+    --row: oklch(0.92 0.008 82); --line-strong: oklch(0.85 0.010 80); --axis: oklch(0.82 0.010 80);
+    --scroll: oklch(0.85 0.010 80);
+    --ink: oklch(0.24 0.015 60); --ink2: oklch(0.30 0.014 62); --ink3: oklch(0.40 0.014 65);
+    --ink4: oklch(0.47 0.014 65); --dim: oklch(0.52 0.012 70); --dim2: oklch(0.61 0.012 70);
+    --accent: oklch(0.60 0.13 45); --accent-hover: oklch(0.48 0.13 45); --accent2: oklch(0.60 0.13 215);
+    --bad: oklch(0.45 0.15 30); --on-accent: oklch(0.99 0.004 90); --on-ink: oklch(0.975 0.008 85);
+    --accent-soft: oklch(0.60 0.13 45 / 0.10); --area: oklch(0.60 0.13 45 / 0.13);
+    --band: oklch(0.24 0.015 60 / 0.06); --trend: oklch(0.24 0.015 60 / 0.45);
+    --stage-rem: oklch(0.60 0.13 215 / 0.55); --stage-light: oklch(0.60 0.13 215 / 0.22);
+    --bar: oklch(0.60 0.13 215 / 0.75);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: oklch(0.185 0.006 70); --panel: oklch(0.225 0.007 70); --inset: oklch(0.265 0.008 70);
+      --stripe: oklch(0.31 0.008 70); --line: oklch(0.33 0.008 70); --line2: oklch(0.31 0.008 70);
+      --row: oklch(0.29 0.008 70); --line-strong: oklch(0.37 0.009 70); --axis: oklch(0.42 0.010 70);
+      --scroll: oklch(0.38 0.008 70);
+      --ink: oklch(0.95 0.006 85); --ink2: oklch(0.90 0.006 85); --ink3: oklch(0.82 0.006 82);
+      --ink4: oklch(0.75 0.006 80); --dim: oklch(0.69 0.006 78); --dim2: oklch(0.62 0.006 78);
+      --accent: oklch(0.74 0.13 48); --accent-hover: oklch(0.82 0.11 48); --accent2: oklch(0.74 0.11 215);
+      --bad: oklch(0.70 0.15 30); --on-accent: oklch(0.17 0.006 70); --on-ink: oklch(0.17 0.006 70);
+      --accent-soft: oklch(0.74 0.13 48 / 0.16); --area: oklch(0.74 0.13 48 / 0.16);
+      --band: oklch(0.95 0.006 85 / 0.08); --trend: oklch(0.95 0.006 85 / 0.45);
+      --stage-rem: oklch(0.74 0.11 215 / 0.55); --stage-light: oklch(0.74 0.11 215 / 0.28);
+      --bar: oklch(0.74 0.11 215 / 0.75);
+    }
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  * { box-sizing: border-box; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-hover); }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  ::-webkit-scrollbar { height: 8px; width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 8px; }
+</style>
+</helmet>
+<div style="min-height: 100vh; background: var(--bg); color: var(--ink); font-family: Archivo, Helvetica, sans-serif; font-feature-settings: 'tnum' 1;">
+
+<header style="max-width: 1180px; margin: 0 auto; padding: clamp(18px, 3vw, 36px) clamp(14px, 3vw, 32px) 0;">
+  <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px;">
+    <div style="display: flex; flex-direction: column; gap: 7px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="width: 9px; height: 9px; border-radius: 50%; background: {{ recoveryColor }};"></span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim);">Rapha · Projeto 60 Dias</span>
+      </div>
+      <h1 style="margin: 0; font-size: clamp(28px, 3.6vw, 44px); font-weight: 600; letter-spacing: -0.025em; line-height: 1;">Day {{ dayOf60 }} <span style="color: var(--dim2); font-weight: 400;">of 60</span></h1>
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--dim);">{{ athleteName }} · sheet {{ sheetNumber }} · week {{ week }} of 8 · built {{ generated }}</div>
+    </div>
+    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: {{ freshColor }};">● {{ freshLabel }}</div>
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim2);">macro-first recomposition</div>
+    </div>
+  </div>
+  <nav style="display: flex; gap: 4px; overflow-x: auto; margin-top: clamp(18px, 2.4vw, 30px); border-bottom: 1px solid var(--line);">
+    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="6">
+      <button onClick="{{ t.onSelect }}" style="flex: 0 0 auto; cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid {{ t.border }}; padding: 11px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: {{ t.fg }};">{{ t.label }}</button>
+    </sc-for>
+  </nav>
+</header>
+
+<main style="max-width: 1180px; margin: 0 auto; padding: clamp(16px, 2vw, 26px) clamp(14px, 3vw, 32px) 72px; display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 18px);">
+
+<sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+  <div style="display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 18px);">
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(18px, 2vw, 28px);">
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 20px;">
+        <div style="display: flex; flex-direction: column; gap: 10px; max-width: 460px;">
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Recovery</span>
+          <h2 style="margin: 0; font-size: clamp(28px, 3.2vw, 38px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.05; color: {{ recoveryColor }};">{{ recoveryHeadline }}</h2>
+          <p style="margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink3); text-wrap: pretty;">{{ recoveryDetail }}</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0; flex: 1 1 340px; min-width: 280px;">
+          <sc-for list="{{ signals }}" as="s" hint-placeholder-count="5">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--row);">
+              <span style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-size: 14px; font-weight: 500;">{{ s.label }}</span>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.06em; color: var(--dim2);">{{ s.dir }}</span>
+              </span>
+              <span style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+                <span style="font-size: 14px; font-weight: 600; color: {{ s.color }};">{{ s.note }}</span>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim2);">{{ s.recent }}</span>
+              </span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Overnight</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+        <sc-for list="{{ overnight }}" as="o" hint-placeholder-count="3">
+          <div style="background: var(--inset); border: 1px solid var(--line2); border-radius: 3px; padding: 13px 14px;">
+            <div style="font-size: 25px; font-weight: 600; letter-spacing: -0.02em; color: {{ o.color }};">{{ o.n }}</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-top: 4px;">{{ o.l }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: flex; gap: 3px; height: 14px; margin-top: 18px;">
+        <sc-for list="{{ stageBars }}" as="b" hint-placeholder-count="4">
+          <div style="flex: {{ b.flex }}; min-width: 0; background: {{ b.color }}; border-radius: 2px;"></div>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 12px;">
+        <sc-for list="{{ stageBars }}" as="b" hint-placeholder-count="4">
+          <span style="display: flex; align-items: center; gap: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); white-space: nowrap;"><span style="width: 10px; height: 10px; background: {{ b.color }}; border-radius: 2px;"></span>{{ b.label }}</span>
+        </sc-for>
+      </div>
+    </section>
+
+    <sc-if value="{{ showSwitch }}" hint-placeholder-val="{{ true }}">
+      <section style="background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent2); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+        <h2 style="margin: 0 0 10px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Programme update</h2>
+        <p style="margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink2); text-wrap: pretty;">{{ switchText }}</p>
+      </section>
+    </sc-if>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 4px; padding: clamp(18px, 2vw, 28px);">
+      <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Your day, in plain terms</h2>
+      <div style="display: flex; flex-direction: column; gap: 12px; max-width: 68ch;">
+        <sc-for list="{{ coachParas }}" as="p" hint-placeholder-count="3">
+          <p style="margin: 0; font-size: 16px; line-height: 1.6; color: var(--ink2); text-wrap: pretty;">{{ p.text }}</p>
+        </sc-for>
+      </div>
+      <div style="margin-top: 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.06em; color: var(--dim2);">{{ coachSource }}</div>
+    </section>
+
+    <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: clamp(12px, 1.4vw, 18px);">
+      <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px); display: flex; flex-direction: column; gap: 10px;">
+        <h2 style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Train</h2>
+        <div style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Day {{ trainDay }} · {{ trainFocus }}</div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim);">{{ trainMeta }}</div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink4);">{{ trainProgression }}</p>
+      </div>
+      <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px); display: flex; flex-direction: column; gap: 10px;">
+        <h2 style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Eat</h2>
+        <div style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">{{ targetKcal }} kcal · {{ proteinG }} g protein</div>
+        <div style="display: inline-flex; align-self: flex-start; padding: 5px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;">{{ direction }}</div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink4);">{{ firstMealLine }}</p>
+      </div>
+    </section>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isTraining }}" hint-placeholder-val="{{ false }}">
+  <div style="display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 18px);">
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(18px, 2vw, 28px);">
+      <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px;">
+        <h2 style="margin: 0; font-size: clamp(22px, 2.4vw, 28px); font-weight: 600; letter-spacing: -0.02em;">{{ trainFocus }}</h2>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);">{{ trainLevel }} · day {{ trainDay }}</span>
+      </div>
+      <div style="border-left: 3px solid {{ adjColor }}; background: var(--inset); border-radius: 3px; padding: 13px 15px; margin-bottom: 18px;">
+        <div style="font-size: 15px; font-weight: 600;">{{ adjHeadline }}</div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); margin-top: 3px;">Leave {{ adjRir }}</div>
+        <p style="margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink4);">{{ adjDetail }}</p>
+      </div>
+      <sc-for list="{{ exercises }}" as="ex" hint-placeholder-count="7">
+        <div style="display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--row);">
+          <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0;">
+            <div style="font-size: 16px; font-weight: 600; letter-spacing: -0.01em;">{{ ex.name }}</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim);">{{ ex.scheme }}</div>
+            <div style="font-size: 14px; font-weight: 600; color: {{ ex.callColor }};">{{ ex.callHead }}</div>
+            <div style="font-size: 13px; line-height: 1.45; color: var(--ink4); max-width: 62ch;">{{ ex.reasoning }}</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent2);">{{ ex.method }}</div>
+          </div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim2); white-space: nowrap;">{{ ex.rest }}</div>
+        </div>
+      </sc-for>
+      <p style="margin: 16px 0 0; font-size: 14px; line-height: 1.55; color: var(--ink4);"><span style="font-weight: 600; color: var(--ink2);">Progression:</span> {{ trainProgression }}</p>
+      <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--ink4);"><span style="font-weight: 600; color: var(--ink2);">Cadence:</span> {{ cadenceNote }}</p>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 10px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Set this in Garmin Connect</h2>
+      <p style="margin: 0 0 14px; font-size: 14px; line-height: 1.5; color: var(--ink4); max-width: 70ch;">{{ garminHelp }}</p>
+      <pre style="margin: 0; background: var(--inset); border: 1px dashed var(--line-strong); border-radius: 3px; padding: 15px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.75; white-space: pre-wrap; overflow-x: auto; color: var(--ink2);">{{ garminSheet }}</pre>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;">
+        <button onClick="{{ onCopy }}" style="cursor: pointer; background: var(--accent); border: 1px solid var(--accent); color: var(--on-accent); border-radius: 999px; padding: 10px 18px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;">{{ copyLabel }}</button>
+        <a href="/workouts.md" target="_blank" style="border: 1px solid var(--line-strong); border-radius: 999px; padding: 10px 18px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3);">All workouts · workouts.md</a>
+        <a href="/workouts.json" target="_blank" style="border: 1px solid var(--line-strong); border-radius: 999px; padding: 10px 18px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3);">workouts.json</a>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: var(--dim); max-width: 70ch;">{{ allWorkoutsNote }}</p>
+    </section>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isMeals }}" hint-placeholder-val="{{ false }}">
+  <div style="display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 18px);">
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(18px, 2vw, 28px);">
+      <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Today · hits your target exactly</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+        <sc-for list="{{ macroStats }}" as="m" hint-placeholder-count="4">
+          <div style="background: var(--inset); border: 1px solid var(--line2); border-radius: 3px; padding: 13px 14px;">
+            <div style="font-size: 26px; font-weight: 600; letter-spacing: -0.02em;">{{ m.n }}</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-top: 4px;">{{ m.l }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px;">
+        <span style="display: inline-flex; padding: 5px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;">{{ direction }}</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim);">{{ energyLine }}</span>
+      </div>
+      <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.55; color: var(--ink4); max-width: 74ch;">{{ directionWhy }}</p>
+      <p style="margin: 6px 0 0; font-size: 14px; line-height: 1.55; color: var(--ink4);"><span style="font-weight: 600; color: var(--ink2);">Split:</span> {{ split }}</p>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(18px, 2vw, 28px);">
+      <h2 style="margin: 0 0 16px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Meals · weighed portions, timed to your training</h2>
+      <div style="display: flex; flex-direction: column; gap: 18px;">
+        <sc-for list="{{ meals }}" as="meal" hint-placeholder-count="6">
+          <div style="border-left: 2px solid var(--accent); padding-left: 16px;">
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: var(--accent);">{{ meal.head }}</div>
+            <div style="font-size: 16px; font-weight: 600; margin-top: 3px;">{{ meal.label }}</div>
+            <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 8px;">
+              <sc-for list="{{ meal.items }}" as="it" hint-placeholder-count="3">
+                <div style="font-size: 14px; color: var(--ink3);"><span style="font-weight: 600; color: var(--ink);">{{ it.grams }} g</span> {{ it.food }} <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim2);">· {{ it.kcal }} kcal</span></div>
+              </sc-for>
+              <div style="font-size: 13px; color: var(--accent2); margin-top: 2px;">+ {{ meal.free }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: clamp(12px, 1.4vw, 18px);">
+      <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+        <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Supplements</h2>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <sc-for list="{{ supplements }}" as="s" hint-placeholder-count="4">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <div style="font-size: 15px; font-weight: 600;">{{ s.name }} — {{ s.dose }}</div>
+              <div style="font-size: 13px; color: var(--ink4);">{{ s.when }}</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim2);">{{ s.source }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+        <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">How to use it</h2>
+        <div style="display: flex; flex-direction: column; gap: 9px;">
+          <sc-for list="{{ principles }}" as="p" hint-placeholder-count="4">
+            <div style="display: flex; gap: 9px; font-size: 14px; line-height: 1.5; color: var(--ink3);"><span style="color: var(--accent);">—</span><span>{{ p.text }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isPerformance }}" hint-placeholder-val="{{ false }}">
+  <div style="display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 18px);">
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 2vw, 28px);">
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: clamp(16px, 2vw, 24px);">
+        <sc-for list="{{ heroTabs }}" as="m" hint-placeholder-count="5">
+          <button onClick="{{ m.onSelect }}" style="cursor: pointer; padding: 8px 14px; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; background: {{ m.bg }}; color: {{ m.fg }}; border: 1px solid {{ m.border }};">{{ m.label }}</button>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px;">
+        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 200px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim);">{{ heroLabel }} · window average</div>
+          <div style="display: flex; align-items: baseline; gap: 8px;">
+            <span style="font-size: clamp(48px, 6.4vw, 76px); font-weight: 600; letter-spacing: -0.035em; line-height: 0.9;">{{ heroValue }}</span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--dim);">{{ heroUnit }}</span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px; flex: 1 1 300px; max-width: 460px;">
+          <div style="display: flex; align-items: baseline; gap: 10px;">
+            <span style="font-size: clamp(22px, 2.6vw, 30px); font-weight: 600; letter-spacing: -0.02em; color: {{ heroDeltaColor }};">{{ heroDelta }}</span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);">vs previous window</span>
+          </div>
+          <p style="margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink3); text-wrap: pretty;">{{ heroVerdict }}</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 12px; margin-top: clamp(16px, 2vw, 26px);">
+        <div style="display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; width: 46px; flex: none; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim2); height: clamp(200px, 24vw, 280px);">
+          <span>{{ yMax }}</span><span>{{ yMid }}</span><span>{{ yMin }}</span>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="position: relative; height: clamp(200px, 24vw, 280px); border-top: 1px solid var(--line2); border-bottom: 1px solid var(--axis);">
+            <div style="position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dotted var(--line2);"></div>
+            <svg viewBox="0 0 1000 100" preserveAspectRatio="none" style="position: absolute; inset: 0; width: 100%; height: 100%; display: block;">
+              <path d="{{ heroArea }}" fill="var(--area)"></path>
+              <path d="{{ heroBand }}" fill="var(--band)"></path>
+              <path d="{{ heroTrend }}" fill="none" stroke="var(--trend)" stroke-width="1.25" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"></path>
+              <path d="{{ heroLine }}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+            </svg>
+            <div style="position: absolute; z-index: 2; left: 6px; top: {{ prevAvgLabelTop }}; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--accent2); background: var(--panel); padding: 2px 5px;">prev avg {{ prevAvg }}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim2);">
+            <sc-for list="{{ xTicks }}" as="t" hint-placeholder-count="5">
+              <span>{{ t.label }}</span>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Snapshot</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+        <sc-for list="{{ snapshot }}" as="s" hint-placeholder-count="4">
+          <div style="background: var(--inset); border: 1px solid var(--line2); border-radius: 3px; padding: 13px 14px;">
+            <div style="font-size: 25px; font-weight: 600; letter-spacing: -0.02em;">{{ s.n }}</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-top: 4px;">{{ s.l }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: clamp(12px, 1.4vw, 18px);">
+      <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+        <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Volume &amp; adherence</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px;">
+          <sc-for list="{{ volumeStats }}" as="v" hint-placeholder-count="4">
+            <div style="background: var(--inset); border: 1px solid var(--line2); border-radius: 3px; padding: 11px 12px;">
+              <div style="font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">{{ v.n }}</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-top: 3px;">{{ v.l }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: flex-end; gap: 4px; height: 78px; margin: 18px 0 0;">
+          <sc-for list="{{ volumeBars }}" as="b" hint-placeholder-count="12">
+            <div style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; height: 100%;">
+              <div style="height: {{ b.h }}; background: var(--bar); border-radius: 2px 2px 0 0;"></div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 8px; text-align: center; color: var(--dim2); white-space: nowrap; overflow: hidden;">{{ b.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink4);">{{ volumeNote }}</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 14px;">
+          <sc-for list="{{ adherenceStats }}" as="a" hint-placeholder-count="4">
+            <div style="background: var(--inset); border: 1px solid var(--line2); border-radius: 3px; padding: 11px 12px;">
+              <div style="font-size: 20px; font-weight: 600; letter-spacing: -0.02em;">{{ a.n }}</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-top: 3px;">{{ a.l }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 18px);">
+        <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+          <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Load balance</h2>
+          <div style="display: flex; align-items: baseline; gap: 12px;">
+            <span style="font-size: 44px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; color: {{ acwrColor }};">{{ acwr }}</span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: {{ acwrColor }};">{{ acwrBand }}</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 18px; margin-top: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim);">
+            <span>acute {{ acute }}</span><span>4-wk weekly avg {{ chronic }}</span><span>sweet spot 0.8–1.3</span>
+          </div>
+          <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink4);">{{ acwrNote }}</p>
+        </div>
+        <div style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px;">
+            <h2 style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Day · heart rate</h2>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim2);">{{ intradayDate }}</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 8px;">
+            <span style="font-size: 32px; font-weight: 600; letter-spacing: -0.02em;">{{ hrRange }}</span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim2);">bpm range</span>
+          </div>
+          <svg viewBox="0 0 600 90" preserveAspectRatio="none" style="width: 100%; height: 90px; display: block; margin-top: 10px;">
+            <path d="{{ hrArea }}" fill="var(--accent-soft)"></path>
+            <path d="{{ hrLine }}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+          </svg>
+          <div style="display: flex; justify-content: space-between; margin-top: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--dim2);">
+            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+        <h2 style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Trends over time</h2>
+        <div style="display: flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px;">
+          <sc-for list="{{ rangeTabs }}" as="r" hint-placeholder-count="5">
+            <button onClick="{{ r.onSelect }}" style="border: 0; cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 7px 13px; border-radius: 999px; background: {{ r.bg }}; color: {{ r.fg }};">{{ r.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <p style="margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--dim); max-width: 76ch;">{{ trendsNote }}</p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 16px;">
+        <sc-for list="{{ metricCards }}" as="c" hint-placeholder-count="7">
+          <div style="background: var(--inset); border: 1px solid var(--line2); border-radius: 3px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px;">
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);">{{ c.label }}</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--dim2);">{{ c.dir }}</span>
+            </div>
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px;">
+              <span style="font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1;">{{ c.value }}</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: {{ c.deltaColor }};">{{ c.delta }}</span>
+            </div>
+            <svg viewBox="0 0 300 44" preserveAspectRatio="none" style="width: 100%; height: 44px; display: block;">
+              <path d="{{ c.area }}" fill="var(--accent-soft)"></path>
+              <path d="{{ c.line }}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+            </svg>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim2);">{{ c.foot }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Load progression</h2>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; min-width: 620px; border-collapse: collapse; font-size: 14px;">
+          <thead>
+            <tr>
+              <th style="text-align: left; padding: 0 12px 10px 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--axis);">Exercise</th>
+              <th style="text-align: right; padding: 0 12px 10px 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--axis);">Sess.</th>
+              <th style="text-align: right; padding: 0 12px 10px 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--axis);">Top set</th>
+              <th style="text-align: right; padding: 0 12px 10px 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--axis);">Trend</th>
+              <th style="text-align: right; padding: 0 0 10px 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--axis); width: 130px;">Top weight</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ progression }}" as="p" hint-placeholder-count="6">
+              <tr>
+                <td style="padding: 12px 12px 12px 0; border-bottom: 1px solid var(--row);">{{ p.name }}</td>
+                <td style="padding: 12px 12px 12px 0; text-align: right; border-bottom: 1px solid var(--row);">{{ p.sessions }}</td>
+                <td style="padding: 12px 12px 12px 0; text-align: right; border-bottom: 1px solid var(--row);">{{ p.load }}</td>
+                <td style="padding: 12px 12px 12px 0; text-align: right; border-bottom: 1px solid var(--row); color: {{ p.trendColor }};">{{ p.trend }}</td>
+                <td style="padding: 12px 0; border-bottom: 1px solid var(--row);">
+                  <svg viewBox="0 0 120 26" preserveAspectRatio="none" style="width: 100%; height: 26px; display: block;">
+                    <path d="{{ p.line }}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+                  </svg>
+                </td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: var(--dim);">{{ progressionNote }}</p>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Recent sessions</h2>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; min-width: 520px; border-collapse: collapse; font-size: 14px;">
+          <thead>
+            <tr>
+              <th style="text-align: left; padding: 0 12px 10px 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--axis);">Date</th>
+              <th style="text-align: left; padding: 0 12px 10px 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--axis);">Type</th>
+              <th style="text-align: right; padding: 0 12px 10px 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--axis);">Time</th>
+              <th style="text-align: right; padding: 0 12px 10px 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--axis);">Avg HR</th>
+              <th style="text-align: right; padding: 0 0 10px 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--axis);">kcal</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ activities }}" as="a" hint-placeholder-count="6">
+              <tr>
+                <td style="padding: 11px 12px 11px 0; border-bottom: 1px solid var(--row); font-family: 'IBM Plex Mono', monospace; font-size: 12px;">{{ a.date }}</td>
+                <td style="padding: 11px 12px 11px 0; border-bottom: 1px solid var(--row);">{{ a.kind }}</td>
+                <td style="padding: 11px 12px 11px 0; text-align: right; border-bottom: 1px solid var(--row);">{{ a.duration }}</td>
+                <td style="padding: 11px 12px 11px 0; text-align: right; border-bottom: 1px solid var(--row);">{{ a.hr }}</td>
+                <td style="padding: 11px 0; text-align: right; border-bottom: 1px solid var(--row);">{{ a.kcal }}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isProgress }}" hint-placeholder-val="{{ false }}">
+  <div style="display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 18px);">
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Body composition</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+        <sc-for list="{{ bodyStats }}" as="s" hint-placeholder-count="4">
+          <div style="background: var(--inset); border: 1px solid var(--line2); border-radius: 3px; padding: 13px 14px;">
+            <div style="font-size: 25px; font-weight: 600; letter-spacing: -0.02em;">{{ s.n }}</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-top: 4px;">{{ s.l }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: var(--dim);">{{ bodyFatSource }}</p>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Weight trend</h2>
+      <div style="position: relative; height: clamp(160px, 20vw, 220px); border-top: 1px solid var(--line2); border-bottom: 1px solid var(--axis);">
+        <div style="position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dotted var(--line2);"></div>
+        <svg viewBox="0 0 600 100" preserveAspectRatio="none" style="position: absolute; inset: 0; width: 100%; height: 100%; display: block;">
+          <path d="{{ weightArea }}" fill="var(--accent-soft)"></path>
+          <path d="{{ weightEst }}" fill="none" stroke="var(--trend)" stroke-width="1.4" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"></path>
+          <path d="{{ weightLine }}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+        </svg>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim2);">
+        <span>{{ weightFrom }}</span>
+        <span style="display: flex; gap: 16px;"><span style="color: var(--accent);">weigh-ins</span><span>– – – trend estimate</span></span>
+        <span>{{ weightTo }}</span>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink3);">{{ weightSummary }}</p>
+      <p style="margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--dim);">{{ weightTrendNote }}</p>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 12px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Measurements</h2>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+        <sc-for list="{{ measureTags }}" as="m" hint-placeholder-count="10">
+          <span style="border: 1px solid var(--line2); background: var(--inset); border-radius: 3px; padding: 5px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink3);">{{ m.text }}</span>
+        </sc-for>
+      </div>
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.06em; color: var(--dim2); margin-top: 10px;">{{ tapeLine }}</div>
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-top: 16px;">Change since you started measuring</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+        <sc-for list="{{ measureChanges }}" as="c" hint-placeholder-count="4">
+          <span style="border: 1px solid var(--line2); border-radius: 3px; padding: 5px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: {{ c.color }};">{{ c.text }}</span>
+        </sc-for>
+      </div>
+      <button onClick="{{ onToggleMeas }}" style="cursor: pointer; margin-top: 16px; background: var(--ink); border: 1px solid var(--ink); color: var(--on-ink); border-radius: 999px; padding: 10px 18px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;">{{ measButtonLabel }}</button>
+      <sc-if value="{{ measOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top: 16px; border-top: 1px solid var(--line2); padding-top: 16px;">
+          <p style="margin: 0 0 12px; font-size: 13px; line-height: 1.5; color: var(--ink4); max-width: 70ch;">Enter what you measured today — leave the rest blank; blank fields keep their last value. Waist + neck drive the body-fat estimate.</p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;">
+            <sc-for list="{{ measureFields }}" as="f" hint-placeholder-count="10">
+              <label style="display: flex; flex-direction: column; gap: 5px;">
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim);">{{ f.label }} · {{ f.unit }}</span>
+                <input value="{{ f.value }}" onChange="{{ f.onInput }}" inputmode="decimal" style="background: var(--inset); border: 1px solid var(--line); border-radius: 3px; padding: 9px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--ink); width: 100%;">
+              </label>
+            </sc-for>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px;">
+            <button onClick="{{ onSaveMeas }}" style="cursor: pointer; background: var(--accent); border: 1px solid var(--accent); color: var(--on-accent); border-radius: 999px; padding: 10px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;">Save measurement</button>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent2);">{{ measStatus }}</span>
+          </div>
+        </div>
+      </sc-if>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 12px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Progress photos</h2>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <label style="cursor: pointer; background: var(--accent); border: 1px solid var(--accent); color: var(--on-accent); border-radius: 999px; padding: 10px 18px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;">Upload photos<input type="file" multiple accept=".heic,.heif,.jpg,.jpeg,.png,image/*" style="display: none;"></label>
+        <button onClick="{{ onTogglePhotos }}" style="cursor: pointer; background: transparent; border: 1px solid var(--line-strong); border-radius: 999px; padding: 10px 18px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3);">{{ photoButtonLabel }}</button>
+      </div>
+      <sc-if value="{{ photosOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 20px;">
+          <sc-for list="{{ photoSets }}" as="set" hint-placeholder-count="2">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);">{{ set.date }}</div>
+              <div style="border-left: 2px solid var(--accent); background: var(--inset); border-radius: 3px; padding: 12px 14px;">
+                <div style="font-size: 14px; font-weight: 600;">{{ set.headline }}</div>
+                <p style="margin: 6px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink4); max-width: 74ch;">{{ set.analysis }}</p>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">
+                <sc-for list="{{ set.images }}" as="img" hint-placeholder-count="4">
+                  <div style="aspect-ratio: 3 / 4; border: 1px solid var(--line); border-radius: 3px; background-color: var(--inset); background-image: repeating-linear-gradient(135deg, var(--stripe) 0 6px, var(--inset) 6px 12px); display: flex; align-items: flex-end; padding: 10px;">
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.06em; color: var(--dim); background: var(--panel); padding: 3px 6px;">{{ img.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <p style="margin: 14px 0 0; font-size: 13px; line-height: 1.5; color: var(--dim); max-width: 74ch;">{{ photoNote }}</p>
+    </section>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isStatus }}" hint-placeholder-val="{{ false }}">
+  <div style="display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 18px);">
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(18px, 2vw, 28px);">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="width: 9px; height: 9px; border-radius: 50%; background: {{ freshColor }};"></span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Data status</span>
+      </div>
+      <h2 style="margin: 10px 0 0; font-size: clamp(26px, 3vw, 34px); font-weight: 600; letter-spacing: -0.025em; color: {{ freshColor }};">{{ statusText }}</h2>
+      <p style="margin: 8px 0 0; font-size: 15px; line-height: 1.5; color: var(--ink3); max-width: 70ch;">{{ statusSub }}</p>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 14px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Last Garmin pull</h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;">
+        <div style="background: var(--inset); border: 1px solid var(--line2); border-radius: 3px; padding: 13px 14px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 500;">{{ lastPull }}</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-top: 4px;">When</div>
+        </div>
+        <div style="background: var(--inset); border: 1px solid var(--line2); border-radius: 3px; padding: 13px 14px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 500;">{{ pullAge }}</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-top: 4px;">Age</div>
+        </div>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 14px; color: var(--ink4);">Last pull brought in: {{ pullSummary }}</p>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px;">
+        <button onClick="{{ onPull }}" style="cursor: pointer; background: var(--accent); border: 1px solid var(--accent); color: var(--on-accent); border-radius: 999px; padding: 10px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;">Pull now</button>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent2);">{{ pullStatus }}</span>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.55; color: var(--dim); max-width: 76ch;">{{ freshRule }}</p>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 12px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">Browser session</h2>
+      <div style="font-size: 15px; color: {{ chromeColor }};">● {{ chromeState }}</div>
+      <button onClick="{{ onLaunch }}" style="cursor: pointer; margin-top: 14px; background: transparent; border: 1px solid var(--line-strong); border-radius: 999px; padding: 10px 18px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink3);">Open Chrome on the Garmin login page</button>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent2); margin-left: 10px;">{{ launchStatus }}</span>
+      <p style="margin: 14px 0 0; font-size: 13px; line-height: 1.6; color: var(--ink4); max-width: 76ch;">{{ chromeHelp }}</p>
+    </section>
+
+    <section style="background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: clamp(16px, 1.8vw, 24px);">
+      <h2 style="margin: 0 0 12px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">How refresh works</h2>
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <sc-for list="{{ refreshRules }}" as="r" hint-placeholder-count="4">
+          <div style="display: flex; gap: 9px; font-size: 14px; line-height: 1.55; color: var(--ink3);"><span style="color: var(--accent);">—</span><span>{{ r.text }}</span></div>
+        </sc-for>
+      </div>
+    </section>
+  </div>
+</sc-if>
+
+</main>
+
+<footer style="max-width: 1180px; margin: 0 auto; padding: 0 clamp(14px, 3vw, 32px) 56px;">
+  <div style="border-top: 1px solid var(--line); padding-top: 16px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim2); display: flex; flex-wrap: wrap; gap: 8px 20px;">
+    <span>observations against projeto 60 dias · not medical advice</span>
+    <span>local-first · 127.0.0.1 · no credential in the portal</span>
+  </div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;athleteName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Rodrigo&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;defaultTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;today&quot;,&quot;training&quot;,&quot;meals&quot;,&quot;performance&quot;,&quot;progress&quot;,&quot;status&quot;],&quot;default&quot;:&quot;today&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Defaults&quot;},&quot;defaultRange&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;7d&quot;,&quot;30d&quot;,&quot;90d&quot;,&quot;1y&quot;,&quot;all&quot;],&quot;default&quot;:&quot;30d&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Defaults&quot;},&quot;heroMetric&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;hrv&quot;,&quot;rhr&quot;,&quot;sleep&quot;,&quot;tdee&quot;,&quot;weight&quot;],&quot;default&quot;:&quot;hrv&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Defaults&quot;}}">
+const A = "var(--accent)";
+const B = "var(--accent2)";
+const BAD = "var(--bad)";
+const INK = "var(--ink)";
+const MUTED = "var(--dim2)";
+const MS_DAY = 86400000;
+const END = new Date(Date.UTC(2026, 7, 20));
+
+const TABS = [
+  ["today", "Today"], ["training", "Training"], ["meals", "Meals"],
+  ["performance", "Performance"], ["progress", "Progress"], ["status", "Data Status"],
+];
+const RANGES = [["7d", 7], ["30d", 30], ["90d", 90], ["1y", 365], ["all", 100000]];
+const HERO = [
+  { key: "hrv", label: "HRV", unit: "ms", higher: true, dec: 1 },
+  { key: "rhr", label: "Resting HR", unit: "bpm", higher: false, dec: 0 },
+  { key: "sleep", label: "Sleep", unit: "h", higher: true, dec: 1 },
+  { key: "tdee", label: "Energy burned", unit: "kcal", higher: true, dec: 0 },
+  { key: "weight", label: "Weight", unit: "kg", higher: false, dec: 1 },
+];
+const PERF = [
+  { key: "tdee", label: "Energy burned (TDEE)", unit: " kcal", higher: true, dec: 0 },
+  { key: "hrv", label: "HRV — overnight", unit: " ms", higher: true, dec: 1 },
+  { key: "rhr", label: "Resting heart rate", unit: " bpm", higher: false, dec: 0 },
+  { key: "sleep", label: "Sleep", unit: " h", higher: true, dec: 1 },
+  { key: "stress", label: "Stress", unit: "", higher: false, dec: 0 },
+  { key: "steps", label: "Steps", unit: "", higher: true, dec: 0 },
+  { key: "weight", label: "Weight", unit: " kg", higher: false, dec: 1 },
+];
+const MEASURE_FIELDS = [
+  ["weight", "Weight", "kg", 79.6], ["waist", "Waist", "cm", 84.5],
+  ["neck", "Neck", "cm", 39.5], ["chest", "Chest", "cm", 104.0],
+  ["shoulders", "Shoulders", "cm", 118.0], ["arm", "Arm", "cm", 35.6],
+  ["thigh", "Thigh", "cm", 58.2], ["hip", "Hip", "cm", 96.0],
+  ["calf", "Calf", "cm", 38.4], ["wingspan", "Wingspan", "cm", 180.0],
+];
+const LOWER_BETTER_TAPE = { waist: true, hip: true };
+const MEASURE_CHANGES = [
+  { label: "Weight", d: -3.3, unit: "kg", lower: true },
+  { label: "Waist", d: -4.5, unit: "cm", lower: true },
+  { label: "Arm", d: 1.2, unit: "cm", lower: false },
+  { label: "Chest", d: 2.0, unit: "cm", lower: false },
+  { label: "Hip", d: -2.1, unit: "cm", lower: true },
+];
+
+const EXERCISES = [
+  { name: "Supino reto com halteres", sets: 4, scheme: "10/10/8/8", rest: 90,
+    decision: "progress", last: 30, suggested: 32, reps: 10,
+    reasoning: "Hit 4 sets at 30 kg with the last rep still controlled, twice in a row — the load is ready to move.",
+    method: "Isometria — hold 2s at the top of each rep" },
+  { name: "Desenvolvimento militar sentado", sets: 4, scheme: "10/8/8/6", rest: 90,
+    decision: "hold", last: 22, reps: 8,
+    reasoning: "Last session lost the bar path on set 3. Repeat 22 kg and own all four sets before adding.",
+    method: "" },
+  { name: "Crucifixo inclinado", sets: 3, scheme: "12/12/10", rest: 60,
+    decision: "progress", last: 14, suggested: 15, reps: 12,
+    reasoning: "Top set finished with two reps in reserve — a 1 kg step keeps the rep target intact.",
+    method: "Negativa — 3s on the lowering phase" },
+  { name: "Elevação lateral", sets: 3, scheme: "15/12/12", rest: 60,
+    decision: "hold", last: 10, reps: 12,
+    reasoning: "Amber readiness caps the small-muscle work today; hold and clean up the tempo.",
+    method: "" },
+  { name: "Paralelas assistidas", sets: 3, scheme: "10/10/8", rest: 90,
+    decision: "progress", reps: 10,
+    reasoning: "Bodyweight movement — add reps or reduce assistance rather than load.",
+    method: "" },
+  { name: "Tríceps corda", sets: 3, scheme: "15/12/12", rest: 45,
+    decision: "progress", last: 27.5, suggested: 30, reps: 12,
+    reasoning: "Three clean sessions at 27.5 kg with reps in hand.", method: "" },
+  { name: "Prancha frontal", sets: 3, scheme: "45s hold", rest: 45,
+    decision: "establish",
+    reasoning: "No logged sets yet — find the hold you can keep square for 45s.", method: "" },
+];
+
+const MEALS = [
+  { time: "06:20", label: "Café da manhã", kcal: 468, protein: 38, free: "black coffee, cinnamon",
+    items: [["Ovos inteiros", 150, 216], ["Aveia em flocos", 50, 190], ["Banana", 90, 62]] },
+  { time: "09:40", label: "Lanche da manhã", kcal: 268, protein: 27, free: "sparkling water",
+    items: [["Iogurte natural desnatado", 200, 118], ["Whey isolado", 20, 78], ["Castanha-do-pará", 12, 72]] },
+  { time: "12:40", label: "Almoço", kcal: 612, protein: 52, free: "green salad, vinegar, herbs",
+    items: [["Peito de frango grelhado", 180, 297], ["Arroz integral cozido", 180, 216], ["Feijão preto cozido", 100, 76], ["Azeite de oliva", 5, 44]] },
+  { time: "16:10", label: "Pré-treino", kcal: 246, protein: 12, free: "coffee, 500 ml water",
+    items: [["Batata-doce cozida", 200, 154], ["Pasta de amendoim integral", 15, 92]] },
+  { time: "19:15", label: "Pós-treino", kcal: 268, protein: 36, free: "500 ml water with electrolytes",
+    items: [["Whey isolado", 35, 137], ["Arroz branco cozido", 100, 130]] },
+  { time: "21:20", label: "Jantar", kcal: 512, protein: 45, free: "steamed greens, lemon",
+    items: [["Filé de tilápia", 200, 192], ["Quinoa cozida", 150, 180], ["Abacate", 60, 96], ["Azeite de oliva", 5, 44]] },
+];
+
+const SUPPLEMENTS = [
+  { name: "Creatina monoidratada", dose: "5 g", when: "Any time, every day including rest days",
+    source: "ISSN position stand — no loading phase needed" },
+  { name: "Whey isolado", dose: "30–35 g", when: "Post-training, inside the protein target — not on top of it",
+    source: "Counted in today's 168 g protein" },
+  { name: "Vitamina D3", dose: "2 000 UI", when: "With the first meal that contains fat",
+    source: "Winter supplementation; recheck serum at the 60-day mark" },
+  { name: "Magnésio glicinato", dose: "300 mg", when: "60–90 min before bed",
+    source: "Sleep-quality support; glycinate for tolerance" },
+];
+
+const PRINCIPLES = [
+  "Weigh food raw unless the portion says cooked — the numbers assume it.",
+  "Protein is the floor, not the ceiling: hit 168 g before you trade anything else.",
+  "Swap inside a food group, not across it — rice for potato is fine, rice for oil is not.",
+  "The free additions are genuinely free: greens, herbs, vinegar, black coffee, water.",
+];
+
+const ACTIVITIES = [
+  ["2026-08-19", "Strength", "58 min", 118, 431],
+  ["2026-08-18", "Cycling", "72 min", 141, 688],
+  ["2026-08-17", "Strength", "61 min", 121, 452],
+  ["2026-08-16", "Walking", "44 min", 96, 198],
+  ["2026-08-15", "Strength", "57 min", 116, 424],
+  ["2026-08-14", "Cycling", "96 min", 137, 874],
+];
+
+const PROGRESSION = [
+  { name: "Supino reto com halteres", sessions: 14, top: 30, reps: 10, trend: 6, from: 24 },
+  { name: "Agachamento livre", sessions: 12, top: 72.5, reps: 8, trend: 10, from: 62.5 },
+  { name: "Remada curvada", sessions: 13, top: 55, reps: 10, trend: 7.5, from: 47.5 },
+  { name: "Desenvolvimento militar", sessions: 11, top: 22, reps: 8, trend: 2, from: 20 },
+  { name: "Levantamento terra", sessions: 9, top: 95, reps: 6, trend: 12.5, from: 82.5 },
+  { name: "Paralelas assistidas", sessions: 10, top: null, reps: 10, trend: 0, from: null },
+];
+
+const COACH = [
+  "Amber, not red. Body Battery came up to 61 overnight and HRV sits at 54 ms — inside your band but at the low edge, which is what two hard sessions in three days looks like. Train, but train the plan rather than the mood.",
+  "Push day is on. Keep the top sets honest: the supino step to 32 kg is earned, the lateral raises are not — hold those and buy the tempo back. Leave 2 reps in reserve everywhere today.",
+  "Food is unchanged at 2 380 kcal and 168 g protein, a 21% deficit against your measured 3 020 kcal TDEE. Waist is down 4.5 cm since you started measuring while the arm is up 1.2 cm — the recomposition is working; don't chase it faster.",
+];
+
+const PHOTO_SETS = [
+  { date: "2026-08-16", headline: "Week 5 — waist visibly narrower, shoulders holding width.",
+    analysis: "Front relaxed shows the oblique line arriving; the drop is coming off the midsection rather than the upper body, which is what you want in a recomposition. Back double-biceps is unchanged from week 3 — expected at this deficit.",
+    images: ["front · relaxed", "side · relaxed", "back · relaxed", "front · flexed"] },
+  { date: "2026-08-02", headline: "Week 3 — first clear change at the waistline.",
+    analysis: "Compared with the baseline set, the difference is water and gut volume more than fat; posture is also better in the side shot, which flatters the reading. Judge the trend at week 6, not here.",
+    images: ["front · relaxed", "side · relaxed", "back · relaxed"] },
+];
+
+const REFRESH_RULES = [
+  "An hourly task runs rapha pull and rebuilds this portal.",
+  "A pull succeeds only if the browser session is open and still logged in — otherwise the dot goes red, your cue to sign in again.",
+  "Garmin sign-ins last a while, so in practice you re-authenticate occasionally, not hourly.",
+  "Uploads and measurements you enter here are saved instantly and don't depend on the pull.",
+];
+
+function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const mean = (a) => a.reduce((s, x) => s + x, 0) / (a.length || 1);
+const dateLabel = (d) => d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+
+function buildDays(weightOverride) {
+  const r = rng(20260820);
+  const n = 260, out = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const wob = Math.sin(i / 4.7) * 0.6 + Math.sin(i / 11.3) * 0.9;
+    out.push({
+      date: new Date(END.getTime() - (n - 1 - i) * MS_DAY),
+      hrv: 44.5 + 10.5 * t + wob * 1.9 + (r() - 0.5) * 5.5,
+      rhr: 54.5 - 5.2 * t - wob * 0.7 + (r() - 0.5) * 2.6,
+      sleep: 6.5 + 0.9 * t + wob * 0.22 + (r() - 0.5) * 0.9,
+      tdee: 2820 + 260 * t + wob * 90 + (r() - 0.5) * 340,
+      stress: 34 - 8 * t - wob * 3 + (r() - 0.5) * 12,
+      steps: 8200 + 3200 * t + wob * 900 + (r() - 0.5) * 3400,
+      weight: 83.1 - 3.5 * t + (r() - 0.5) * 0.7,
+    });
+  }
+  if (weightOverride != null) out[out.length - 1].weight = weightOverride;
+  return out;
+}
+
+function scale(vals, h, pad) {
+  let lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  if (hi - lo < 1e-6) hi = lo + 1;
+  const p = (hi - lo) * 0.12; lo -= p; hi += p;
+  return { lo: lo, hi: hi, y: (v) => pad + (hi - v) / (hi - lo) * (h - pad * 2) };
+}
+function linePath(vals, w, h, pad) {
+  const s = scale(vals, h, pad), step = vals.length > 1 ? w / (vals.length - 1) : w;
+  return { d: vals.map((v, i) => (i ? "L" : "M") + (i * step).toFixed(2) + " " + s.y(v).toFixed(2)).join(" "), s: s };
+}
+function rolling(vals, k) {
+  return vals.map((_, i) => mean(vals.slice(Math.max(0, i - k + 1), i + 1)));
+}
+function sign(v, dec) {
+  const r = Math.abs(v).toFixed(dec);
+  if (parseFloat(r) === 0) return r;
+  return (v > 0 ? "+" : "−") + r;
+}
+function dcolor(v, higher, dec) {
+  if (Math.abs(v) < 0.5 / Math.pow(10, dec || 0)) return MUTED;
+  return (higher ? v > 0 : v < 0) ? A : "var(--dim)";
+}
+function hm(min) { return Math.floor(min / 60) + "h" + String(Math.round(min % 60)).padStart(2, "0") + "m"; }
+
+class Component extends DCLogic {
+  state = {
+    tab: null, range: null, hero: null, copied: false, measOpen: false,
+    photosOpen: false, meas: {}, measStatus: "", pulling: false, pulled: false,
+    launchStatus: "", weightOverride: null,
+  };
+
+  tab() { return this.state.tab || this.props.defaultTab || "today"; }
+  range() { return this.state.range || this.props.defaultRange || "30d"; }
+  heroKey() { return this.state.hero || this.props.heroMetric || "hrv"; }
+
+  renderVals() {
+    const days = buildDays(this.state.weightOverride);
+    const tab = this.tab();
+    const rangeKey = this.range();
+    const rangeDays = Math.min((RANGES.find((r) => r[0] === rangeKey) || RANGES[1])[1], days.length);
+    const heroKey = this.heroKey();
+    const hm2 = HERO.find((m) => m.key === heroKey) || HERO[0];
+
+    const win = days.slice(-rangeDays);
+    const prev = days.slice(-rangeDays * 2, -rangeDays);
+    const hv = win.map((d) => d[heroKey]);
+    const hp = prev.map((d) => d[heroKey]);
+    const avg = mean(hv), prevAvg = hp.length ? mean(hp) : avg;
+    const pct = prevAvg ? (avg - prevAvg) / prevAvg * 100 : 0;
+    const good = hm2.higher ? avg > prevAvg : avg < prevAvg;
+    const lp = linePath(hv, 1000, 100, 8);
+    const tp = linePath(rolling(hv, 7), 1000, 100, 8);
+    const bandM = mean(hv);
+    const sd = Math.sqrt(mean(hv.map((v) => (v - bandM) ** 2)));
+    const yTop = lp.s.y(bandM + sd), yBot = lp.s.y(bandM - sd);
+    const tickIdx = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * (win.length - 1)));
+
+    // intraday HR, 15-minute resolution
+    const ir = rng(881);
+    const hr = [];
+    for (let i = 0; i < 96; i++) {
+      const hour = i / 4;
+      let base = 52 + Math.sin((hour - 4) / 24 * Math.PI * 2) * 7 + 8;
+      if (hour > 6.5 && hour < 22) base += 14;
+      if (hour > 18.2 && hour < 19.4) base += 58 * Math.sin((hour - 18.2) / 1.2 * Math.PI);
+      if (hour > 7.1 && hour < 7.6) base += 22;
+      hr.push(Math.max(46, base + (ir() - 0.5) * 7));
+    }
+    const hrl = linePath(hr, 600, 90, 6);
+
+    // weekly tonnage, 12 weeks
+    const vr = rng(5150);
+    const volWeeks = [];
+    for (let i = 0; i < 12; i++) {
+      const t = i / 11;
+      volWeeks.push({
+        start: new Date(END.getTime() - (11 - i) * 7 * MS_DAY),
+        tonnage: Math.round((14200 + 5200 * t + (vr() - 0.5) * 2600) / 50) * 50,
+        hardSets: Math.round(58 + 18 * t + (vr() - 0.5) * 10),
+        sessions: 3 + (vr() > 0.7 ? 1 : 0),
+      });
+    }
+    const peak = Math.max.apply(null, volWeeks.map((w) => w.tonnage));
+    const thisWeek = volWeeks[volWeeks.length - 1];
+    const trendT = (thisWeek.tonnage - volWeeks[0].tonnage) / 1000;
+
+    // weigh-ins (every ~3 days) + smoothed estimate
+    const wIdx = [];
+    for (let i = 0; i < win.length; i += 3) wIdx.push(i);
+    if (wIdx[wIdx.length - 1] !== win.length - 1) wIdx.push(win.length - 1);
+    const wActual = wIdx.map((i) => win[i].weight);
+    const wEst = rolling(win.map((d) => d.weight), 14);
+    const allW = wActual.concat(wEst);
+    const ws = scale(allW, 100, 8);
+    const wStep = 600 / (win.length - 1);
+    const wPath = wIdx.map((i, k) => (k ? "L" : "M") + (i * wStep).toFixed(1) + " " + ws.y(win[i].weight).toFixed(1)).join(" ");
+    const ePath = wEst.map((v, i) => (i ? "L" : "M") + (i * wStep).toFixed(1) + " " + ws.y(v).toFixed(1)).join(" ");
+    const last = days[days.length - 1];
+
+    const heroTabs = HERO.map((m) => ({
+      label: m.label,
+      bg: m.key === heroKey ? "var(--accent-soft)" : "transparent",
+      fg: m.key === heroKey ? A : "var(--ink4)",
+      border: m.key === heroKey ? A : "var(--line)",
+      onSelect: () => this.setState({ hero: m.key }),
+    }));
+
+    const metricCards = PERF.map((m) => {
+      const cv = win.map((d) => d[m.key]);
+      const cp = prev.length ? mean(prev.map((d) => d[m.key])) : mean(cv);
+      const ca = mean(cv);
+      const cl = linePath(cv, 300, 44, 5);
+      const d0 = ca - cp;
+      const fmtv = m.key === "steps" ? Math.round(ca).toLocaleString("en-GB") : ca.toFixed(m.dec);
+      return {
+        label: m.label, dir: m.higher ? "↑ higher is better" : "↓ lower is better",
+        value: fmtv + m.unit, delta: sign(d0, m.dec) + m.unit, deltaColor: dcolor(d0, m.higher, m.dec),
+        line: cl.d, area: cl.d + " L300 44 L0 44 Z",
+        foot: "avg over " + win.length + " readings",
+      };
+    });
+
+    const exercises = EXERCISES.map((ex) => {
+      let head = "○ Find your working load", color = MUTED;
+      if (ex.decision === "progress" && ex.suggested != null) {
+        head = "↗ Try " + ex.suggested + " kg (last " + ex.last + " kg × " + ex.reps + ")"; color = A;
+      } else if (ex.decision === "progress") {
+        head = "↗ Add reps / harder variation"; color = A;
+      } else if (ex.decision === "hold") {
+        head = "→ Hold " + ex.last + " kg today (recovery)"; color = B;
+      }
+      return {
+        name: ex.name, scheme: ex.sets + " sets · reps " + ex.scheme,
+        callHead: head, callColor: color, reasoning: ex.reasoning,
+        method: ex.method, rest: ex.rest + "s rest",
+      };
+    });
+
+    const sheetLines = ["Workout: P60D · S3 · D3 — Push", ""];
+    EXERCISES.forEach((ex, i) => {
+      sheetLines.push(String(i + 1).padStart(2, " ") + ". " + ex.name + "  →  " +
+        ex.name.split(" ")[0].toUpperCase() + "_" + (ex.sets) + "x  (" + ex.scheme + " reps)");
+    });
+    sheetLines.push("", "Not auto-mapped (enter manually): Paralelas assistidas, Prancha frontal");
+
+    const measLatest = {};
+    MEASURE_FIELDS.forEach((f) => { measLatest[f[0]] = this.state.meas[f[0]] != null ? this.state.meas[f[0]] : f[3]; });
+
+    const acwr = 1.18;
+
+    return {
+      athleteName: this.props.athleteName ?? "Rodrigo",
+      dayOf60: 34, sheetNumber: 3, week: 5, generated: "20 Aug 2026",
+      recoveryColor: A, freshColor: B,
+      freshLabel: this.state.pulling ? "pull running" : "data is current · 23 min",
+      tabs: TABS.map(([key, label]) => ({
+        label: label,
+        fg: key === tab ? INK : "var(--dim)",
+        border: key === tab ? A : "transparent",
+        onSelect: () => this.setState({ tab: key }),
+      })),
+      isToday: tab === "today", isTraining: tab === "training", isMeals: tab === "meals",
+      isPerformance: tab === "performance", isProgress: tab === "progress", isStatus: tab === "status",
+
+      recoveryHeadline: "Amber — train, but keep two reps in reserve",
+      recoveryDetail: "Body Battery recovered to 61 overnight and HRV is inside your band but at its low edge. That is the signature of two hard sessions in three days, not of illness — so the session stands with the load capped.",
+      signals: [
+        { label: "Body Battery at wake", dir: "↑ higher is better", note: "61", recent: "7-day avg 68", color: B },
+        { label: "HRV last night", dir: "↑ higher is better", note: "54 ms · balanced", recent: "band 49–63 ms", color: B },
+        { label: "Sleep", dir: "↑ higher is better", note: "7h04 · score 81", recent: "7-day avg 7h18", color: B },
+        { label: "Stress (all-day avg)", dir: "↓ lower is better", note: "31 · moderate", recent: "7-day avg 26", color: A },
+        { label: "Acute training load", dir: "↓ lower is better", note: "486", recent: "4-wk weekly avg 412", color: A },
+      ],
+      overnight: [
+        { n: "81", l: "Sleep score", color: B },
+        { n: "18–94", l: "Body Battery", color: INK },
+        { n: "Balanced", l: "HRV status", color: B },
+      ],
+      stageBars: [
+        { label: "deep 1h04", flex: 64, color: B },
+        { label: "rem 1h38", flex: 98, color: "var(--stage-rem)" },
+        { label: "light 4h04", flex: 244, color: "var(--stage-light)" },
+        { label: "awake 0h18", flex: 18, color: "var(--line)" },
+      ],
+      showSwitch: true,
+      switchText: "Your training sheet advances to Sheet 4 in 6 days — week 6, 26 Aug 2026. The portal switches automatically; the new workouts are being set up in Garmin.",
+      coachParas: COACH.map((t) => ({ text: t })),
+      coachSource: "Written from today’s numbers — an observation, not a medical opinion. Every call is yours.",
+
+      trainDay: 3, trainFocus: "Push — chest, shoulders, triceps", trainLevel: "INTERMEDIÁRIO",
+      trainMeta: "sheet 3 · week 5 of 8 · 7 exercises",
+      trainProgression: "Double progression — hold the load until every set hits the top of its rep range with form intact, then add the smallest available step.",
+      cadenceNote: "every rep at a controlled tempo — a rep only counts toward the target if the form held; a set rushed with momentum is a different, lesser stimulus (M15/M17).",
+      adjColor: A, adjHeadline: "Amber readiness — cap the accessory work",
+      adjRir: "2 reps in reserve on every set",
+      adjDetail: "Compound steps that were already earned still go up. Small-muscle isolation holds today; the stimulus you lose is smaller than the recovery you buy.",
+      exercises: exercises,
+      garminHelp: "Open Garmin Connect → Training → Workouts → Create a Workout (Strength), then add each step below. Or hand this sheet to Claude in Chrome and have it entered for you.",
+      garminSheet: sheetLines.join("\n"),
+      allWorkoutsNote: "The full rotation for this sheet is available as one file you build once in Garmin Connect — workouts.md for reading, workouts.json for tooling.",
+      copyLabel: this.state.copied ? "Copied ✓" : "Copy workout for Garmin Connect",
+      onCopy: () => {
+        try { navigator.clipboard.writeText(sheetLines.join("\n")); } catch (e) {}
+        this.setState({ copied: true });
+        setTimeout(() => this.setState({ copied: false }), 1600);
+      },
+
+      targetKcal: "2 380", proteinG: 168, direction: "cut",
+      firstMealLine: "06:20 — Café da manhã: 150 g ovos inteiros; 50 g aveia em flocos; 90 g banana.",
+      macroStats: [
+        { n: "2 374 kcal", l: "target 2 380" }, { n: "168 g", l: "protein" },
+        { n: "232 g", l: "carbs" }, { n: "78 g", l: "fat" },
+      ],
+      energyLine: "measured TDEE 3 020 kcal · 21% deficit",
+      directionWhy: "Waist is falling while the arm and chest hold or grow, so the deficit is doing its job at this size. Protein stays at 2.1 g/kg to protect the tissue you are trying to keep.",
+      split: "Protein 168 g · carbs 232 g · fat 78 g — carbs weighted around the 16:10 pre-training and 19:15 post-training meals.",
+      meals: MEALS.map((m) => ({
+        head: m.time + " · " + m.kcal + " kcal · " + m.protein + " g protein",
+        label: m.label, free: m.free,
+        items: m.items.map(([food, grams, kcal]) => ({ food: food, grams: grams, kcal: kcal })),
+      })),
+      supplements: SUPPLEMENTS,
+      principles: PRINCIPLES.map((t) => ({ text: t })),
+
+      heroTabs: heroTabs, heroLabel: hm2.label, heroUnit: hm2.unit,
+      heroValue: heroKey === "steps" ? Math.round(avg).toLocaleString("en-GB") : avg.toFixed(hm2.dec),
+      heroDelta: sign(pct, 1) + "%", heroDeltaColor: good ? A : "var(--ink4)",
+      heroVerdict: (good ? "Trending the right way. " : "Drifting the wrong way. ")
+        + hm2.label + " averaged " + avg.toFixed(hm2.dec) + " " + hm2.unit + " over the last "
+        + win.length + " days against " + prevAvg.toFixed(hm2.dec) + " in the "
+        + prev.length + " before it (σ " + sd.toFixed(1) + ").",
+      heroLine: lp.d, heroArea: lp.d + " L1000 100 L0 100 Z", heroTrend: tp.d,
+      heroBand: "M0 " + yTop.toFixed(2) + " L1000 " + yTop.toFixed(2) + " L1000 " + yBot.toFixed(2) + " L0 " + yBot.toFixed(2) + " Z",
+      prevAvg: prevAvg.toFixed(hm2.dec),
+      prevAvgLabelTop: Math.max(1, lp.s.y(prevAvg) - 9).toFixed(1) + "%",
+      yMax: lp.s.hi.toFixed(hm2.dec), yMid: ((lp.s.hi + lp.s.lo) / 2).toFixed(hm2.dec), yMin: lp.s.lo.toFixed(hm2.dec),
+      xTicks: tickIdx.map((i) => ({ label: dateLabel(win[i].date) })),
+      rangeTabs: RANGES.map(([key]) => ({
+        label: key.toUpperCase(),
+        bg: key === rangeKey ? INK : "transparent",
+        fg: key === rangeKey ? "var(--on-ink)" : "var(--ink4)",
+        onSelect: () => this.setState({ range: key }),
+      })),
+      trendsNote: "A line that starts partway in just means that metric hasn’t been recorded that far back yet — history fills in as the watch keeps syncing.",
+      metricCards: metricCards,
+      snapshot: [
+        { n: "51.4", l: "VO₂ max" }, { n: "26", l: "Strength (12wk)" },
+        { n: "14", l: "Cardio (12wk)" }, { n: "06:40", l: "Usual start" },
+      ],
+      volumeStats: [
+        { n: thisWeek.tonnage.toLocaleString("en-GB") + " kg", l: "Tonnage this week" },
+        { n: thisWeek.hardSets, l: "Hard sets" },
+        { n: thisWeek.sessions, l: "Sessions" },
+        { n: sign(trendT, 1) + " t", l: "vs 12 wks ago" },
+      ],
+      volumeBars: volWeeks.map((w) => ({
+        label: dateLabel(w.start).slice(0, 2),
+        h: Math.max(2, Math.round(w.tonnage / peak * 60)) + "px",
+      })),
+      volumeNote: "Weekly tonnage (reps × load) — the compounding currency of a recomposition block. Hard sets are working sets taken at a real load.",
+      adherenceStats: [
+        { n: "14/16", l: "Sessions (4wk)" }, { n: "88%", l: "Adherence" },
+        { n: "5", l: "Week streak" }, { n: "today", l: "Last session" },
+      ],
+      acwr: acwr.toFixed(2), acwrBand: "ramping hard", acwrColor: A,
+      acute: "486", chronic: "412",
+      acwrNote: "This week’s load against the four-week average you have a base for. Around 0.8–1.3 is where fitness rises without the injury risk that climbs when a week spikes far above the base — an observation, not a rule; a hard block breaches it on purpose.",
+      intradayDate: "19 Aug 2026",
+      hrRange: Math.round(Math.min.apply(null, hr)) + "–" + Math.round(Math.max.apply(null, hr)),
+      hrLine: hrl.d, hrArea: hrl.d + " L600 90 L0 90 Z",
+      progression: PROGRESSION.map((p) => {
+        const pr2 = rng(p.name.length * 97);
+        const from = p.from == null ? 0 : p.from;
+        const series = [];
+        for (let i = 0; i < 8; i++) {
+          series.push(p.from == null ? 8 + i * 0.4 + pr2() : from + (p.top - from) * (i / 7) + (pr2() - 0.5) * 1.2);
+        }
+        const sl = linePath(series, 120, 26, 4);
+        return {
+          name: p.name, sessions: p.sessions,
+          load: p.top == null ? "BW × " + p.reps : p.top + " kg × " + p.reps,
+          trend: p.trend > 0 ? "▲ +" + p.trend + " kg" : p.trend < 0 ? "▼ " + p.trend + " kg" : "→ held",
+          trendColor: p.trend > 0 ? A : p.trend < 0 ? BAD : MUTED,
+          line: sl.d,
+        };
+      }),
+      progressionNote: "Top-set load per movement, read off the watch’s own exercise logs. Showing the 6 most-trained of 23 movements.",
+      activities: ACTIVITIES.map(([date, kind, duration, hr2, kcal]) => ({
+        date: date, kind: kind, duration: duration, hr: hr2, kcal: kcal,
+      })),
+
+      bodyStats: [
+        { n: last.weight.toFixed(1) + " kg", l: "Weight" }, { n: "16.2%", l: "Body fat" },
+        { n: "Mesomorfo", l: "Biotype" }, { n: "Meso-endo", l: "Somatotype" },
+      ],
+      bodyFatSource: "Navy estimate from waist 84.5 cm and neck 39.5 cm — a consistent tracking number, not a lab measurement.",
+      weightLine: wPath, weightArea: wPath + " L600 100 L0 100 Z", weightEst: ePath,
+      weightFrom: dateLabel(win[0].date), weightTo: dateLabel(last.date),
+      weightSummary: "Latest " + last.weight.toFixed(1) + " kg · " + wActual.length + " weigh-ins in this window.",
+      weightTrendNote: "The dotted line is the 14-day trend estimate — that is the number to judge, not any single morning.",
+      measureTags: MEASURE_FIELDS.map((f) => ({ text: f[1] + ": " + measLatest[f[0]] + " " + f[2] })),
+      tapeLine: "Latest tape: 16 Aug 2026 · biotype mesomorfo",
+      measureChanges: MEASURE_CHANGES.map((c) => {
+        const goodDir = c.lower ? c.d < 0 : c.d > 0;
+        return {
+          text: c.label + " " + (c.d < 0 ? "▼ " : "▲ ") + Math.abs(c.d) + " " + c.unit,
+          color: c.d === 0 ? MUTED : goodDir ? A : B,
+        };
+      }),
+      measOpen: this.state.measOpen,
+      measButtonLabel: this.state.measOpen ? "Hide form" : "Add / edit measurement",
+      onToggleMeas: () => this.setState({ measOpen: !this.state.measOpen, measStatus: "" }),
+      measureFields: MEASURE_FIELDS.map((f) => ({
+        label: f[1], unit: f[2], value: String(measLatest[f[0]]),
+        onInput: (e) => {
+          const v = e.target.value;
+          this.setState({ meas: Object.assign({}, this.state.meas, { [f[0]]: v }) });
+        },
+      })),
+      measStatus: this.state.measStatus,
+      onSaveMeas: () => {
+        const w = parseFloat(this.state.meas.weight);
+        this.setState({
+          measStatus: "Saved ✓ portal re-rendered",
+          weightOverride: isNaN(w) ? this.state.weightOverride : w,
+        });
+      },
+      photosOpen: this.state.photosOpen,
+      photoButtonLabel: this.state.photosOpen ? "Hide photos" : "Show photos",
+      onTogglePhotos: () => this.setState({ photosOpen: !this.state.photosOpen }),
+      photoSets: PHOTO_SETS.map((s) => ({
+        date: s.date, headline: s.headline, analysis: s.analysis,
+        images: s.images.map((l) => ({ label: l })),
+      })),
+      photoNote: "Photos stay on this machine — under %RAPHA_HOME%\\data\\photos\\<date>\\, outside the sync root. HEIC from the phone is converted on upload.",
+
+      statusText: this.state.pulling ? "Pull running…" : "Data is current",
+      statusSub: this.state.pulling
+        ? "The task is attached to your browser session — this takes about a minute."
+        : "Last pull was within 60 minutes. The hourly task is running and the browser session is still signed in.",
+      lastPull: this.state.pulled ? "2026-08-20 06:03" : "2026-08-20 05:40",
+      pullAge: this.state.pulled ? "just now" : "23 min ago",
+      pullSummary: "612 activities · 260 days of metrics · 68 weigh-ins · 4 128 exercise sets",
+      pullStatus: this.state.pulling ? "Pull running… (about a minute)" : this.state.pulled ? "Pull complete ✓" : "",
+      onPull: () => {
+        if (this.state.pulling) return;
+        this.setState({ pulling: true });
+        setTimeout(() => this.setState({ pulling: false, pulled: true }), 1800);
+      },
+      freshRule: "The dot turns red once a pull is more than 60 minutes old, and stays accent while it is fresh. “Pull now” runs the same job immediately — it needs the browser session below to be open.",
+      chromeColor: B, chromeState: "A Garmin browser session is open — a pull can run.",
+      launchStatus: this.state.launchStatus,
+      onLaunch: () => this.setState({ launchStatus: "Chrome is opening on the Garmin sign-in page…" }),
+      chromeHelp: "The pull can only run while a Chrome you have logged into Garmin is open. Click the button, sign in (password, any check), then leave that window open. Rapha only ever attaches to it — it never sees your password, and stores no credential.",
+      refreshRules: REFRESH_RULES.map((t) => ({ text: t })),
+    };
+  }
+}
+</script>
+</body>
+</html>

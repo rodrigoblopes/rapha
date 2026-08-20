@@ -46,16 +46,15 @@ def test_it_renders_without_a_data_status_section():
     assert 'id="datastatus"' in html
 
 
-def test_tab_navigation_colour_is_cyan_not_green():
+def test_tab_navigation_is_an_underline_not_a_pill():
     css = portal.CSS
-    assert "--cyan:" in css
-    # hover and the active tab both use cyan now
+    # the redesign uses an underline nav: the active tab carries an accent bottom border
     assert "nav button:hover:not(.on)" in css
-    assert "nav button.on{background:var(--cyan)" in css
+    assert "nav button.on{color:var(--ink);border-bottom-color:var(--accent)}" in css
 
 
 def test_data_status_tab_has_its_own_health_colours():
     css = portal.CSS
-    # green when ok, red when there's a problem — overriding the cyan nav colour
-    assert "nav button.statusok" in css and "var(--accent)" in css
-    assert "nav button.statusbad" in css and "var(--red)" in css
+    # Data Status keeps its own health colours: ok = accent2 (blue), bad = --bad
+    assert "nav button.statusok" in css and "var(--accent2)" in css
+    assert "nav button.statusbad" in css and "var(--bad)" in css
