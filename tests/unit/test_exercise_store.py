@@ -103,3 +103,27 @@ def test_a_bodyweight_set_stores_null_weight_not_zero(store):
         _active("PULL_UP", 10, None, "PULL_UP")]))
     rows = store.sets_for_activity(1)
     assert rows[0].weight_g is None  # absent load is a fact, not zero
+
+
+def test_last_session_sets_returns_the_most_recent_days_sets_in_order(store):
+    store.record_activity(1, date(2026, 8, 1), _payload(1, [
+        _active("SQUAT", 12, 60000), _active("SQUAT", 12, 60000)]))
+    store.record_activity(2, date(2026, 8, 8), _payload(2, [
+        _active("SQUAT", 10, 70000), _active("SQUAT", 9, 70000)]))
+    assert store.last_session_sets("SQUAT") == [(10, 70000), (9, 70000)]
+
+
+def test_last_session_sets_is_empty_for_an_unseen_movement(store):
+    assert store.last_session_sets("NEVER_DONE") == []
+
+
+def test_last_session_sets_weighted_only_skips_a_repping_only_session(store):
+    # Older session carried a load; the most recent one logged reps but no weight
+    # (the watch never captured it). Progression must read the last KNOWN load.
+    store.record_activity(1, date(2026, 8, 1), _payload(1, [
+        _active("LEG_PRESS", 12, 200000), _active("LEG_PRESS", 12, 200000)]))
+    store.record_activity(2, date(2026, 8, 8), _payload(2, [
+        _active("LEG_PRESS", 8, None), _active("LEG_PRESS", 6, None)]))
+    assert store.last_session_sets("LEG_PRESS") == [(8, None), (6, None)]
+    assert store.last_session_sets("LEG_PRESS", weighted_only=True) == [
+        (12, 200000), (12, 200000)]

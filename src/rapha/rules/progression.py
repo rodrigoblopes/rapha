@@ -145,7 +145,9 @@ def call_from_history(
     reps at that load are judged against ``target_reps``. Progress adds the smallest
     step; a short session holds and builds into the weight (M17).
     """
-    weighted = [(r, w) for r, w in last_sets if w is not None]
+    # A sub-kilo 'weight' is Garmin detection noise on a machine, not a real load —
+    # floor it out so a bogus 0.0 kg never becomes the working weight.
+    weighted = [(r, w) for r, w in last_sets if w is not None and w >= 1000]
 
     # No history at all -> the load is not established yet.
     if not last_sets:

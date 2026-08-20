@@ -92,6 +92,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 .ex:last-child{border:none}.ex .nm{font-weight:550}.ex .sc{color:var(--dim);font-size:13px;margin-top:2px}
 .ex .rt{color:var(--dim);font-size:12px;white-space:nowrap}
 .note{color:var(--dim);font-size:13px;line-height:1.6;margin-top:8px}
+.callrow{margin-top:6px;font-size:13px;line-height:1.5}.callrow strong{padding:2px 8px;border-radius:6px;font-size:13px}.callrow.good strong{background:rgba(60,200,120,.16);color:var(--good)}.callrow.warn strong{background:rgba(230,180,60,.16);color:var(--warn)}.callrow.muted strong{background:rgba(140,150,160,.16);color:var(--dim)}.callrow .why{display:block;color:var(--dim);font-size:11px;margin-top:3px}
 .gsheet{background:var(--card2);border:1px dashed var(--line);border-radius:11px;padding:14px;
   font:13px/1.7 ui-monospace,"SF Mono",Menlo,monospace;white-space:pre-wrap;overflow-x:auto}
 .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
@@ -470,6 +471,31 @@ def _recovery_emoji(status: str) -> str:
     return {"green": "●", "amber": "●", "red": "●"}.get(status, "●")
 
 
+def _call_line(call: dict | None) -> str:
+    """The double-progression call for one exercise: what load to try, and why.
+
+    Green = add a plate, amber = hold and build in, grey = establish the load. The
+    load is always framed as a suggestion the lifter confirms by feel (M17).
+    """
+    if not call:
+        return ""
+    dec = call.get("decision")
+    if dec == "progress" and call.get("suggested_kg") is not None:
+        cls, head = "good", f'↗ Try {call["suggested_kg"]:g} kg'
+        if call.get("last_kg") is not None:
+            head += f' (last {call["last_kg"]:g} kg × {call["target_reps"]})'
+    elif dec == "progress":                       # bodyweight
+        cls, head = "good", "↗ Add reps / harder variation"
+    elif dec == "hold":
+        cls = "warn"
+        head = (f'→ Hold {call["last_kg"]:g} kg' if call.get("last_kg") is not None
+                else "→ Hold")
+    else:                                          # establish
+        cls, head = "muted", "○ Find your working load"
+    return (f'<div class="callrow {cls}"><strong>{_e(head)}</strong>'
+            f'<span class="why">{_e(call.get("reasoning",""))}</span></div>')
+
+
 def _training_tab(b: dict) -> str:
     tr = b.get("training", {})
     if not tr.get("available"):
@@ -486,7 +512,8 @@ def _training_tab(b: dict) -> str:
                 if ex.get("issues") else "")
         ex_rows += (
             f'<div class="ex"><div><div class="nm">{_e(ex["name"].title())}</div>'
-            f'<div class="sc">{ex["sets"]} sets · reps {_e(ex["scheme"])}</div>{warn}</div>'
+            f'<div class="sc">{ex["sets"]} sets · reps {_e(ex["scheme"])}</div>'
+            f'{_call_line(ex.get("call"))}{warn}</div>'
             f'<div class="rt">{rest}</div></div>'
         )
 

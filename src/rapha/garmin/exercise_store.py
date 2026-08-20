@@ -186,6 +186,33 @@ class ExerciseStore:
             out.append(SessionBest(on, top_w, reps_at_top, volume, len(sets)))
         return out
 
+    def last_session_sets(
+        self, name: str, *, weighted_only: bool = False
+    ) -> list[tuple[int | None, int | None]]:
+        """One movement's ACTIVE sets from its most recent session: (reps, weight_g).
+
+        This is what the double-progression call reads — last time's actual sets, in
+        order — to judge whether to add load. Empty if the movement was never logged.
+
+        ``weighted_only`` picks the most recent session that actually carried a load,
+        skipping later sessions where Garmin logged reps but no weight (a machine set
+        the watch never captured). That is what progression needs: the last *known*
+        working load, not a repping-only session with the weight missing.
+        """
+        weight_clause = " AND weight_g >= 1000" if weighted_only else ""
+        latest = self._conn.execute(
+            f"SELECT MAX(on_date) AS d FROM exercise_sets WHERE name = ?{weight_clause}",
+            (name,),
+        ).fetchone()
+        if not latest or not latest["d"]:
+            return []
+        rows = self._conn.execute(
+            """SELECT reps, weight_g FROM exercise_sets
+               WHERE name = ? AND on_date = ? ORDER BY set_index""",
+            (name, latest["d"]),
+        ).fetchall()
+        return [(r["reps"], r["weight_g"]) for r in rows]
+
     def exercises(self) -> list[ExerciseSummary]:
         """Every movement seen, once, with its session count and latest date."""
         rows = self._conn.execute(

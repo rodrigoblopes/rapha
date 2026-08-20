@@ -169,7 +169,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     }
 
     briefing["overview"] = _overview(days, acts, programmes, st, today)
-    briefing["training"] = _training(programmes, st, today)
+    briefing["training"] = _training(cfg, programmes, st, today)
     briefing["meals"] = _meals(days, diets, foods, cfg, st, today, measurements)
     briefing["performance"] = _performance(days, acts, today, cfg.home)
     briefing["progression"] = _progression(cfg)
@@ -399,7 +399,53 @@ def _sheet_switch(programmes, st, today) -> dict | None:
     }
 
 
-def _training(programmes, st, today) -> dict:
+def _session_progression(cfg, session) -> tuple[dict, dict]:
+    """Per-exercise double-progression calls for one session, read from real history.
+
+    Returns ``(calls, loads)``: ``calls`` maps an exercise name to a serialised
+    :class:`~rapha.rules.progression.NextSessionCall`; ``loads`` maps a Garmin
+    exercise name to the suggested load in grams, for pre-filling the watch. Empty
+    when there is no set history yet — a new athlete simply establishes loads first.
+    """
+    from ..mapping.exercises import try_map
+    from ..rules.progression import call_from_history
+
+    calls: dict = {}
+    loads: dict = {}
+    if not cfg.db_path.is_file():
+        return calls, loads
+
+    from ..garmin.exercise_store import ExerciseStore
+
+    with ExerciseStore(cfg.db_path) as es:
+        for ex in session.get("exercises", []):
+            sets = ex.get("sets") or []
+            rep_targets = [s.get("reps") for s in sets if isinstance(s.get("reps"), int)]
+            if not rep_targets:            # a timed hold — no load progression
+                continue
+            target = min(rep_targets)      # the heaviest set's rep target
+            gm = try_map(ex["name"])
+            if not gm or not gm.name:
+                continue
+            dumbbell = "DUMBBELL" in (gm.name or "") or "DUMBBELL" in (gm.category or "")
+            last = es.last_session_sets(gm.name, weighted_only=True)
+            call = call_from_history(target, last, using_dumbbells=dumbbell)
+            calls[ex["name"]] = {
+                "decision": call.decision.value,
+                "target_reps": call.target_reps,
+                "last_kg": (call.last_weight_kg_x10 / 10
+                            if call.last_weight_kg_x10 is not None else None),
+                "suggested_kg": (call.suggested_kg_x10 / 10
+                                 if call.suggested_kg_x10 is not None else None),
+                "bodyweight": call.bodyweight,
+                "reasoning": call.reasoning,
+            }
+            if call.suggested_kg_x10 is not None:
+                loads[gm.name] = call.suggested_kg_x10 * 100   # kg×10 -> grams
+    return calls, loads
+
+
+def _training(cfg, programmes, st, today) -> dict:
     from ..garmin.workout import RepStrategy, build_workout
     from ..mapping.exercises import try_map
 
@@ -418,6 +464,7 @@ def _training(programmes, st, today) -> dict:
 
     exercises = []
     garmin_steps = []
+    calls, load_targets = _session_progression(cfg, session)
     for ex in session["exercises"]:
         sets = ex.get("sets") or []
         reps = [s.get("reps") for s in sets]
@@ -436,6 +483,7 @@ def _training(programmes, st, today) -> dict:
             "scheme": scheme,
             "rest_s": (rest["value"] if isinstance(rest, dict) else rest),
             "issues": ex.get("issues") or [],
+            "call": calls.get(ex["name"]),
         })
         gm = try_map(ex["name"])
         if gm:
@@ -466,6 +514,7 @@ def _training(programmes, st, today) -> dict:
             "workout_name": workout_name,
             "steps": garmin_steps,
             "unmapped": unmapped,
+            "loads_g": load_targets,
         },
     }
 
