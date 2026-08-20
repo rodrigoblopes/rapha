@@ -675,7 +675,18 @@ def _volume(cfg, acts, programmes, st, today) -> dict:
         "this_week": {"tonnage_kg": latest.tonnage_kg, "hard_sets": latest.hard_sets,
                       "sessions": latest.sessions},
         "adherence": _adherence(acts, series, programmes, st, today),
+        "load": _load_balance(acts, today),
     }
+
+
+def _load_balance(acts, today) -> dict:
+    """Acute:chronic training-load ratio from Garmin's per-activity load score."""
+    from ..rules.workload import acwr
+
+    loads = [(a.start.date(), a.training_load_x10) for a in acts]
+    lb = acwr(loads, today=today)
+    return {"acute": lb.acute, "chronic_weekly": lb.chronic_weekly, "ratio": lb.ratio,
+            "band": lb.band, "reliable": lb.reliable}
 
 
 def _adherence(acts, series, programmes, st, today, *, window: int = 28) -> dict:

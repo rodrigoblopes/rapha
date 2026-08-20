@@ -621,6 +621,37 @@ _PERF_METRICS = [
 ]
 
 
+def _load_card(lb: dict | None) -> str:
+    """Acute:chronic training-load ratio — a ramp gauge, coloured by the ACWR band."""
+    if not lb or lb.get("ratio") is None:
+        return ""
+    band = lb.get("band", "unknown")
+    labels = {"detraining": ("Detraining", "warn"), "optimal": ("Optimal ramp", "good"),
+              "building": ("Building", "good"), "high": ("Ramping hard", "warn"),
+              "spike": ("Load spike", "bad"), "unknown": ("—", "muted")}
+    text, cls = labels.get(band, ("—", "muted"))
+    ratio = lb["ratio"]
+    reliable = lb.get("reliable")
+    caveat = ("" if reliable else
+              '<div class="note">Still building a 4-week baseline — the ratio reads high '
+              'until there is enough history behind it.</div>')
+    return f"""
+  <div class="card">
+    <h2>Load balance</h2>
+    <div class="row">
+      {_stat(f'<span class="{cls}">{ratio:g}</span>', "Acute : chronic")}
+      {_stat(lb.get("acute", 0), "This week (load)")}
+      {_stat(lb.get("chronic_weekly", 0), "4-wk weekly avg")}
+      {_stat(f'<span class="{cls}">{text}</span>', "Reading")}
+    </div>
+    <div class="note">This week's training load against the four-week average you've built
+      a base for. Around 0.8–1.3 is the sweet spot where fitness rises without the injury
+      risk that climbs when a week spikes far above your base — an observation, not a rule;
+      a hard block breaches it on purpose.</div>
+    {caveat}
+  </div>"""
+
+
 def _volume_card(v: dict) -> str:
     """Weekly tonnage bars + hard sets, and the adherence line — the 'more work over
     time' signal and the 'am I showing up' signal, side by side."""
@@ -730,6 +761,7 @@ def _performance_tab(b: dict) -> str:
     </div>
   </div>
   {_volume_card(b.get("volume", {}))}
+  {_load_card((b.get("volume", {}) or {}).get("load"))}
   {_intraday_card(p.get("intraday"))}
   <div class="card" style="position:sticky;top:0;z-index:5">
     <h2>Trends over time</h2>
