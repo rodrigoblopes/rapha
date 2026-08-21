@@ -510,3 +510,22 @@ spots, then the **newest** VSCode-extension bundle by mtime (the path is version
 moves on every update — verified live when it jumped 2.1.235 → 2.1.238). Fully optional: if
 no CLI is found, analysis stays "pending" and nothing else changes. `RAPHA_VISION_MODEL` can
 pin a model; otherwise the CLI's session default is used.
+
+## ADR-016 — Optional LAN exposure of the portal (no auth)
+
+**Context.** The owner wants to reach the portal from other devices on the home LAN
+(phone, tablet). The server binds `127.0.0.1` only (ADR-009) precisely because the portal
+renders body photos and health data with no authentication.
+
+**Decision.** Make the bind address configurable — `PORTAL_HOST`, default `127.0.0.1`.
+`0.0.0.0` exposes it to the LAN. This was taken as an **explicit, warned deviation**: the
+owner was shown that it publishes health data and the mutating endpoints to every device on
+the network with no login, and chose it over the offered safer paths (token auth,
+view-only, Tailscale). Two protections are kept even so: the Host-header allowlist is
+widened only to the **machine's own addresses** (a foreign `Host:` — the DNS-rebinding
+vector — is still refused), and the same-origin POST guard remains. It also needs a Windows
+Firewall inbound rule for the port; without it the LAN can't connect.
+
+**Consequences.** No authentication is a real exposure and is the owner's accepted risk;
+revisit with token auth or Tailscale (the machine already has a Tailscale IP) if the network
+is ever shared. Default behaviour is unchanged — localhost-only unless `PORTAL_HOST` is set.

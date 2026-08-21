@@ -312,7 +312,7 @@ which one was used, land every record in the same tables.
 |---|---|---|
 | daily | `rapha sync` | Pulls new Garmin data into SQLite |
 | weekly | `rapha plan` | Next week's fichas + menu; `rapha push` sends workouts after confirmation |
-| at logon | `rapha serve` | Local portal on `127.0.0.1` |
+| at logon | `rapha serve` | Portal on `127.0.0.1` by default; `PORTAL_HOST=0.0.0.0` exposes it to the LAN with NO auth (ADR-016) |
 | weekly, by hand | the review | Claude reads the briefing and coaches |
 
 ---

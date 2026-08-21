@@ -63,6 +63,8 @@ class Config:
     protein_g_per_kg_x10: int
     tdee_window_days: int
     portal_port: int
+    portal_host: str
+    portal_allowed_hosts: str
 
     @property
     def db_path(self) -> Path:
@@ -114,4 +116,9 @@ def load(home: Path | None = None, *, allow_synced_home: bool = False) -> Config
         protein_g_per_kg_x10=int(get("PROTEIN_G_PER_KG_X10", "19")),
         tdee_window_days=int(get("TDEE_WINDOW_DAYS", "21")),
         portal_port=int(get("PORTAL_PORT", "8766")),
+        # Bind address for `serve`. Default localhost-only (the safe posture,
+        # ADR-009); 0.0.0.0 exposes the portal to the LAN — a deliberate opt-in
+        # recorded in ADR-016.
+        portal_host=(get("PORTAL_HOST", "127.0.0.1") or "127.0.0.1"),
+        portal_allowed_hosts=(get("PORTAL_ALLOWED_HOSTS", "") or ""),
     )

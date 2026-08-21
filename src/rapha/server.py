@@ -10,7 +10,10 @@ which read files and never a token — so the boundary holds.)
 
 Security properties, all deliberate:
 
-- Binds ``127.0.0.1`` only. Never ``0.0.0.0``.
+- Binds ``127.0.0.1`` by default. ``PORTAL_HOST=0.0.0.0`` opts into LAN exposure
+  (ADR-016) — no auth, every device on the network can view health data and hit the
+  mutating endpoints; only the machine's own addresses are added to the Host allowlist
+  so DNS-rebinding to a foreign host is still refused.
 - Validates the ``Host`` header. DNS rebinding is the real attack against
   localhost services: a malicious page in your browser can otherwise reach them.
 - Emits no CORS headers, so a cross-origin page cannot read a response even if it
@@ -31,6 +34,7 @@ Security properties, all deliberate:
 from __future__ import annotations
 
 import json
+import socket
 import sys
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -61,8 +65,9 @@ class PortalHandler(SimpleHTTPRequestHandler):
         _log(f"{self.address_string()} {fmt % args}")
 
     def _host_is_allowed(self) -> bool:
-        host = (self.headers.get("Host") or "").split(":")[0].strip()
-        return host in ALLOWED_HOSTS
+        host = (self.headers.get("Host") or "").split(":")[0].strip().lower()
+        allowed = getattr(self.server, "rapha_allowed_hosts", None) or ALLOWED_HOSTS
+        return host in allowed
 
     def do_GET(self) -> None:
         if not self._host_is_allowed():
@@ -345,6 +350,30 @@ class PortalHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
 
+def _lan_addresses() -> set[str]:
+    """Best-effort local names/IPs to accept in the Host header when bound to the LAN.
+
+    Adding the machine's own addresses (not "any host") keeps the DNS-rebinding defence:
+    a foreign Host like attacker.com is still rejected even with the portal on the LAN.
+    """
+    hosts: set[str] = set()
+    try:
+        name = socket.gethostname()
+        hosts.add(name.lower())
+        for info in socket.getaddrinfo(name, None):
+            hosts.add(info[4][0].lower())
+    except OSError:
+        pass
+    try:  # the primary outbound-route IP — no packet is actually sent
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("8.8.8.8", 80))
+        hosts.add(probe.getsockname()[0])
+        probe.close()
+    except OSError:
+        pass
+    return hosts
+
+
 def serve(cfg, *, forever: bool = True) -> int:
     dist: Path = cfg.dist_dir
     if not (dist / "index.html").is_file():
@@ -352,11 +381,29 @@ def serve(cfg, *, forever: bool = True) -> int:
         return 1
 
     handler = partial(PortalHandler, directory=str(dist))
-    httpd = ThreadingHTTPServer(("127.0.0.1", cfg.portal_port), handler)
+    httpd = ThreadingHTTPServer((cfg.portal_host, cfg.portal_port), handler)
     # The upload handler reads these off the server instance (self.server).
     httpd.rapha_cfg = cfg
     httpd.rapha_port = cfg.portal_port
-    _log(f"Rapha portal on http://127.0.0.1:{cfg.portal_port}  (serving {dist})")
+
+    allowed = set(ALLOWED_HOSTS)
+    lan = cfg.portal_host not in ("127.0.0.1", "localhost")
+    if lan:
+        # ⚠️ LAN exposure (ADR-016): no auth — every device on the network can view
+        # health data and hit the mutating endpoints. Deliberate, user-confirmed.
+        addrs = _lan_addresses()
+        allowed |= addrs
+        allowed |= {h.strip().lower()
+                    for h in cfg.portal_allowed_hosts.split(",") if h.strip()}
+    httpd.rapha_allowed_hosts = allowed
+
+    if lan:
+        ips = sorted(a for a in _lan_addresses() if a[:1].isdigit())
+        where = ", ".join(f"http://{a}:{cfg.portal_port}" for a in ips) or "the LAN"
+        _log(f"⚠ Rapha portal EXPOSED ON THE LAN (no auth) at {where}  "
+             f"(bound {cfg.portal_host}:{cfg.portal_port}, serving {dist})")
+    else:
+        _log(f"Rapha portal on http://127.0.0.1:{cfg.portal_port}  (serving {dist})")
     if not forever:
         httpd.server_close()
         return 0
