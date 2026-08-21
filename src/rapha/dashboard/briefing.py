@@ -213,8 +213,12 @@ def _coach_note(cfg, today) -> dict | None:
     if not text:
         return None
     written = datetime.fromtimestamp(path.stat().st_mtime).date()
+    # Fresh only on the day it was written. The note is hand-authored (nothing in the
+    # hourly refresh regenerates it), so a day-old note would otherwise keep showing
+    # yesterday's day-number and numbers while the rest of the page has moved on; when
+    # stale it yields to the always-fresh templated coach.
     return {"text": text, "written": written.isoformat(),
-            "fresh": (today - written).days <= 1}
+            "fresh": written == today}
 
 
 def _coach(cfg, b: dict, today: date) -> dict:

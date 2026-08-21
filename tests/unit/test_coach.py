@@ -33,6 +33,18 @@ class TestCoachNoteFreshness:
         note = _coach_note(self._cfg(tmp_path), date.today())
         assert note is not None and note["fresh"] is True
 
+    def test_yesterdays_note_is_not_fresh(self, tmp_path):
+        # A note is only today's read on the day it was written — otherwise it would
+        # show yesterday's day-number while the live page has moved on.
+        from datetime import timedelta
+        f = tmp_path / "coach.md"
+        f.write_text("Yesterday's advice.", encoding="utf-8")
+        y = date.today() - timedelta(days=1)
+        ts = __import__("time").mktime(y.timetuple())
+        os.utime(f, (ts, ts))
+        note = _coach_note(self._cfg(tmp_path), date.today())
+        assert note is not None and note["fresh"] is False
+
     def test_an_old_note_is_read_but_not_fresh(self, tmp_path):
         f = tmp_path / "coach.md"
         f.write_text("Old advice.", encoding="utf-8")
