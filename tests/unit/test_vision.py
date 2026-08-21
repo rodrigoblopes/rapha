@@ -1,8 +1,8 @@
-"""Photo vision review — the gating and file-discovery logic (no network).
+"""Photo vision review — gating and file discovery (no CLI actually invoked).
 
-These pin the graceful no-op paths: without a key, without the SDK, or without photos,
-analysis writes nothing and the portal keeps showing 'pending'. The API call itself is
-not exercised here (it needs a live key)."""
+These pin the graceful no-op paths: without photos, or without a locatable Claude CLI,
+analysis writes nothing and the portal keeps showing 'pending'. The CLI call itself is
+not exercised here."""
 
 from types import SimpleNamespace
 
@@ -24,8 +24,8 @@ def test_no_photos_is_a_noop(tmp_path):
     assert vision.analyze_day(_cfg(tmp_path), "2026-08-21") is False
 
 
-def test_photos_but_no_key_is_a_noop(tmp_path, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_photos_but_no_cli_is_a_noop(tmp_path, monkeypatch):
+    monkeypatch.setattr(vision, "find_claude", lambda cfg=None: None)
     day = _add_photo(tmp_path)
     assert vision.analyze_day(_cfg(tmp_path), day) is False
     assert not (tmp_path / "data" / "photos" / day / "analysis.md").exists()
@@ -37,6 +37,10 @@ def test_jpgs_are_found_under_the_jpg_subdir(tmp_path):
     assert len(found) == 1 and found[0].name == "front.jpg"
 
 
-def test_is_configured_is_false_without_a_key(tmp_path, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    assert vision.is_configured(_cfg(tmp_path)) is False
+def test_an_explicit_cli_override_is_honoured(tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUDE_CLI", raising=False)
+    fake = tmp_path / "claude.exe"
+    fake.write_text("", encoding="utf-8")
+    monkeypatch.setenv("CLAUDE_CLI", str(fake))
+    assert vision.find_claude(_cfg(tmp_path)) == str(fake)
+    assert vision.is_configured(_cfg(tmp_path)) is True

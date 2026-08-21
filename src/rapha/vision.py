@@ -1,50 +1,75 @@
-"""Vision review of progress photos — written the moment they are uploaded.
+"""Vision review of progress photos — written the moment they are uploaded, on your
+Claude Max plan, not a metered API key.
 
-The static portal server holds no credential and cannot run vision (ADR-001/009). So
-this runs as a **separate, short-lived process** the upload flow fires — the same shape
-as ``pull-now`` firing the scheduled task: it reads the day's JPGs, asks Claude to write
-a physique-progress read, and saves it to ``analysis.md`` beside the set, which the
-portal already renders. The listening server never holds the Anthropic key; this
-subprocess reads it, uses it, and exits.
+The static portal server holds no credential and cannot run vision (ADR-001/009). So the
+review runs in a **separate, short-lived process** the upload fires — the shape of
+``pull-now`` firing the scheduled task: it locates the already-installed **Claude Code
+CLI**, asks it (headless, ``claude -p``) to read the day's JPGs and write a physique read,
+captures the text into ``analysis.md`` beside the set, and exits. The CLI runs on the
+user's Max subscription; nothing here holds an API key and the ``anthropic`` SDK is not a
+dependency.
 
-Optional by design. It needs the ``anthropic`` SDK (the ``vision`` extra) and an
-``ANTHROPIC_API_KEY`` in ``%RAPHA_HOME%/.env``. Without either, analysis simply stays
-"pending" exactly as before — nothing on the upload path breaks.
+Fully optional: if the Claude CLI can't be found, analysis stays "pending" exactly as
+before — nothing on the upload path breaks.
 """
 
 from __future__ import annotations
 
-import base64
+import glob
 import os
+import shutil
+import subprocess
 from pathlib import Path
 
-#: Default model. Override per-install with RAPHA_VISION_MODEL (e.g. a cheaper tier).
-DEFAULT_MODEL = "claude-opus-5"
-#: A front/side/back set is a handful of shots; cap what one review sends.
+#: A front/side/back set is a handful of shots; cap what one review reads.
 MAX_IMAGES = 6
+#: Vision over several photos can take a while; well clear of a real run, bounded so a
+#: wedged CLI can never hang the analysis forever.
+TIMEOUT_S = 300
 
-_SYSTEM = (
-    "You are a physique and body-recomposition coach reviewing a client's progress "
-    "photos for the Projeto 60 Dias programme. Give an honest, encouraging, plain-"
-    "language read for someone who is not a fitness expert. Note visible changes in "
-    "muscle definition, posture, and where fat is carried; say what looks like it is "
-    "progressing and what to prioritise next. These are OBSERVATIONS against a training "
-    "framework — never medical advice, never a judgement of the person. Do NOT estimate "
-    "a body-fat percentage from a photo. Output a one-line headline, a blank line, then "
-    "two to four short paragraphs."
-)
 _PROMPT = (
-    "These are today's progress photos. Write the review now: first line a short, "
-    "encouraging headline, then a blank line, then 2-4 short paragraphs of observations "
-    "and what to focus on next."
+    "You are a physique and body-recomposition coach reviewing a client's progress "
+    "photos for the Projeto 60 Dias programme. Read these photos: {paths}. Then write an "
+    "honest, encouraging, plain-language review for someone who is NOT a fitness expert. "
+    "Note visible changes in muscle definition, posture, and where fat is carried; say "
+    "what looks like it is progressing and what to prioritise next. These are OBSERVATIONS "
+    "against a training framework — never medical advice, never a judgement of the person; "
+    "do NOT estimate a body-fat percentage from a photo. Output ONLY the review: first line "
+    "a short encouraging headline, then a blank line, then two to four short paragraphs. "
+    "Do not write any preamble, file paths, or commentary about the task."
 )
 
 
 def _env(cfg, key: str) -> str | None:
-    """A value from the real environment, else %RAPHA_HOME%/.env — same order as config."""
     from .config import _parse_env_file
 
     return os.environ.get(key) or _parse_env_file(cfg.home / ".env").get(key)
+
+
+def find_claude(cfg=None) -> str | None:
+    """Locate the Claude Code CLI. Explicit override wins, then PATH, then the usual
+    install spots, then the newest VSCode-extension bundle."""
+    candidates: list[str] = []
+    override = (os.environ.get("CLAUDE_CLI")
+                or (_env(cfg, "CLAUDE_CLI") if cfg is not None else None))
+    if override:
+        candidates.append(override)
+    which = shutil.which("claude")
+    if which:
+        candidates.append(which)
+    home = Path.home()
+    candidates += [str(home / ".claude" / "local" / "claude.exe"),
+                   str(home / ".claude" / "local" / "claude")]
+    for c in candidates:
+        if c and Path(c).is_file():
+            return c
+    # The VSCode extension ships a version-pinned binary; pick the most recent install.
+    pat = str(home / ".vscode" / "extensions" / "anthropic.claude-code-*"
+              / "resources" / "native-binary" / "claude.exe")
+    bundles = glob.glob(pat)
+    if bundles:
+        return max(bundles, key=os.path.getmtime)
+    return None
 
 
 def day_dir(cfg, day: str) -> Path:
@@ -59,21 +84,15 @@ def jpgs_for(cfg, day: str) -> list[Path]:
 
 
 def is_configured(cfg) -> bool:
-    """True when a key is present AND the SDK is importable — i.e. analysis can run."""
-    if not _env(cfg, "ANTHROPIC_API_KEY"):
-        return False
-    try:
-        import anthropic  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    """True when the Claude CLI can be found — i.e. analysis can actually run."""
+    return find_claude(cfg) is not None
 
 
 def analyze_day(cfg, day: str, *, verbose: bool = False) -> bool:
-    """Write ``analysis.md`` for one day's photos. Returns True only if one was written.
+    """Write ``analysis.md`` for one day's photos via the Claude CLI. True iff written.
 
-    A graceful no-op (returns False) when there are no photos, no key, or no SDK — the
-    portal keeps showing the 'analysis pending' state rather than anything fabricated.
+    A graceful no-op (False) when there are no photos or the CLI can't be found — the
+    portal keeps its 'analysis pending' state rather than anything fabricated.
     """
     def say(m: str) -> None:
         if verbose:
@@ -83,34 +102,27 @@ def analyze_day(cfg, day: str, *, verbose: bool = False) -> bool:
     if not imgs:
         say(f"no photos for {day}")
         return False
-    key = _env(cfg, "ANTHROPIC_API_KEY")
-    if not key:
-        say("no ANTHROPIC_API_KEY (%RAPHA_HOME%/.env) — leaving analysis pending")
+    claude = find_claude(cfg)
+    if not claude:
+        say("Claude Code CLI not found — leaving analysis pending "
+            "(set CLAUDE_CLI in %RAPHA_HOME%/.env if it lives somewhere unusual)")
         return False
+
+    prompt = _PROMPT.format(paths=", ".join(str(p) for p in imgs))
+    cmd = [claude, "-p", prompt, "--allowedTools", "Read",
+           "--permission-mode", "acceptEdits", "--output-format", "text"]
+    model = _env(cfg, "RAPHA_VISION_MODEL")
+    if model:
+        cmd += ["--model", model]
     try:
-        import anthropic
-    except ImportError:
-        say("anthropic SDK not installed — pip install 'rapha[vision]'")
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8",
+            errors="replace", timeout=TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError) as e:
+        say(f"Claude CLI failed to run: {e}")
         return False
-
-    content: list[dict] = []
-    for p in imgs:
-        b64 = base64.standard_b64encode(p.read_bytes()).decode("ascii")
-        content.append({"type": "image", "source": {
-            "type": "base64", "media_type": "image/jpeg", "data": b64}})
-    content.append({"type": "text", "text": _PROMPT})
-
-    client = anthropic.Anthropic(api_key=key)
-    msg = client.messages.create(
-        model=_env(cfg, "RAPHA_VISION_MODEL") or DEFAULT_MODEL,
-        max_tokens=900,
-        system=_SYSTEM,
-        messages=[{"role": "user", "content": content}],
-    )
-    text = "".join(b.text for b in msg.content
-                   if getattr(b, "type", None) == "text").strip()
-    if not text:
-        say("empty response — nothing written")
+    text = (result.stdout or "").strip()
+    if result.returncode != 0 or not text:
+        say(f"no review produced (exit {result.returncode})")
         return False
     (day_dir(cfg, day) / "analysis.md").write_text(text, encoding="utf-8")
     say(f"wrote analysis for {day} from {len(imgs)} photo(s)")

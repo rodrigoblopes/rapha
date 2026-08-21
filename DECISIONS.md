@@ -485,24 +485,28 @@ repeat is `stepTypeId` 6 with an `iterations` (`conditionTypeId` 7) end-conditio
 
 **Rest is `stepTypeId` 5, not 4 (corrected after an on-watch test).** The first Sheet-02 push emitted rest on `stepTypeId` 4, and we wrote here that Garmin's returning it as a `recovery` step was "expected". It was not — id 4 *is* `recovery`, an active interval; a between-sets rest is id **5** (`rest`). The mislabel made the watch run each session as an interval workout rather than a set-based strength one, with two visible symptoms the user caught in the gym: no per-set reps+weight confirmation screen, and an active-elapsed display instead of the big rest countdown (the timer still buzzed at the end). Verified live and against the reverse-engineered strength API (`n1t3k/garmin-strength-api`): warmup 1, cooldown 2, interval 3, recovery 4, rest 5, repeat 6. A test now pins the rest **id**, not just its key — the old test checked only the key, which was already `"rest"` on the wrong id. Working sets keep the reps end-condition (`conditionTypeId` 10) and carry no target weight yet; the reference also allows a `weightValue`/`weightUnit` pair, the next lever if the per-set weight prompt still needs coaxing.
 
-## ADR-015 — Immediate progress-photo analysis via a fired subprocess
+## ADR-015 — Immediate progress-photo analysis via the Claude CLI (Max plan)
 
 **Context.** The portal must show a physique review the moment photos are uploaded, but
 the server holds no credential (ADR-001/009) and cannot run vision. Vision needs a model
-call, which needs an API key.
+call. A metered API key was rejected on cost — the household already pays for a Claude Max
+subscription, which covers the Claude Code CLI.
 
-**Decision.** Keep the server credential-free and move the credential to a **short-lived
-subprocess** the upload fires — the same shape as `pull-now` firing the scheduled task and
+**Decision.** Keep the server credential-free and run the review in a **short-lived
+subprocess** the upload fires — the shape of `pull-now` firing the scheduled task and
 `launch-chrome` opening a browser. `POST /analyze-photos` validates the date to
 `YYYY-MM-DD`, passes it as an argv element (no shell), and `Popen`s `rapha analyze-photo
-<date>`. That process reads `ANTHROPIC_API_KEY` from `%RAPHA_HOME%/.env`, calls Claude
-vision on the day's JPGs (`vision.py`, the optional `vision` extra), writes `analysis.md`,
-re-renders, and exits. The listening server never reads the key. The upload UI fires the
-job once (after all files land), then polls the read-only `GET /photo-analysis?date=` until
-the review is written and reloads.
+<date>`. That process (`vision.py`) locates the installed **Claude Code CLI** and runs it
+headless — `claude -p "<prompt naming the day's JPG paths>" --allowedTools Read
+--permission-mode acceptEdits --output-format text` — captures the text into `analysis.md`,
+re-renders, and exits. The CLI runs on the user's **Max plan**; no API key is stored, and
+`anthropic` is not a dependency. The upload UI fires the job once (after all files land),
+polls the read-only `GET /photo-analysis?date=`, and reloads when the review appears.
 
-**Consequences.** The feature is fully optional: no key or no `anthropic` SDK → analysis
-stays "pending", exactly as before, nothing else changes. Cost is a couple of cents per
-upload at `claude-opus-5` (the default; `RAPHA_VISION_MODEL` can pick a cheaper tier). This
-adds the first outbound model call in the project and the first `anthropic` dependency —
-justified by the explicit requirement and contained to the subprocess, off the server path.
+**Consequences.** No per-call cost and no new dependency — it reuses the CLI Claude Code
+already ships. The CLI's stdout is decoded as UTF-8 (not the Windows locale) so em-dashes
+survive. Binary discovery prefers an explicit `CLAUDE_CLI`, then PATH and the usual install
+spots, then the **newest** VSCode-extension bundle by mtime (the path is version-pinned and
+moves on every update — verified live when it jumped 2.1.235 → 2.1.238). Fully optional: if
+no CLI is found, analysis stays "pending" and nothing else changes. `RAPHA_VISION_MODEL` can
+pin a model; otherwise the CLI's session default is used.

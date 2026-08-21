@@ -292,7 +292,7 @@ async function uploadPhotos(input){
       if(j.ready){ status.textContent='Analysis ready ✓ reloading…'; setTimeout(()=>location.reload(),500); return; }
     }catch(e){}
     if(tries>=20){
-      status.textContent='Uploaded ✓ — reloading. If a review does not appear, photo analysis needs an ANTHROPIC_API_KEY (see setup).';
+      status.textContent='Uploaded ✓ — reloading. If no review appears, the Claude CLI could not be found (see setup).';
       setTimeout(()=>location.reload(),900); return;
     }
     setTimeout(poll,3000);

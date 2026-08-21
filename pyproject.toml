@@ -32,12 +32,6 @@ photos = [
     "pillow>=10.0",
     "pillow-heif>=0.16",
 ]
-# Immediate vision review of an uploaded progress-photo set (ADR-015). Runs ONLY in
-# the short-lived subprocess the upload fires, never in the credential-free server;
-# imported lazily by vision.py. Needs an ANTHROPIC_API_KEY in %RAPHA_HOME%/.env.
-vision = [
-    "anthropic>=0.40",
-]
 
 [project.scripts]
 rapha = "rapha.cli:main"
