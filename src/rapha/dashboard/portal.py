@@ -264,25 +264,40 @@ function togglePhotos(btn){
   btn.innerText=shown?'Show photos':'Hide photos';
 }
 async function uploadPhotos(input){
-  // POST each file raw with its name in X-Filename. The server converts HEIC->JPG,
-  // stores under today's date, and re-renders; we reload to show the new set.
+  // POST each file raw with its name in X-Filename. The server converts HEIC->JPG and
+  // stores under today's date. Then we kick off the vision review (a fired subprocess)
+  // and poll until it has written its read, so the analysis appears right after upload.
   const status=document.getElementById('upstatus');
   const files=[...input.files];
   if(!files.length) return;
-  status.textContent='Uploading '+files.length+' photo'+(files.length>1?'s':'')+'\\u2026';
-  let ok=0, err='';
+  status.textContent='Uploading '+files.length+' photo'+(files.length>1?'s':'')+'…';
+  let ok=0, err='', date='';
   for(const f of files){
     try{
-      const r=await fetch('/upload/photo',{method:'POST',
-        headers:{'X-Filename':f.name},body:f});
+      const r=await fetch('/upload/photo',{method:'POST',headers:{'X-Filename':f.name},body:f});
       const j=await r.json().catch(()=>({}));
-      if(r.ok&&j.ok){ok++;} else {err=(j&&j.error)||('HTTP '+r.status);}
-    }catch(e){err=''+e;}
+      if(r.ok&&j.ok){ ok++; if(j.date) date=j.date; } else { err=(j&&j.error)||('HTTP '+r.status); }
+    }catch(e){ err=''+e; }
   }
   input.value='';
-  if(ok){status.textContent=ok+' uploaded \\u2713 reloading\\u2026';
-    setTimeout(()=>location.reload(),700);}
-  else{status.textContent='Upload failed: '+err+' (is the portal served by rapha serve?)';}
+  if(!ok){ status.textContent='Upload failed: '+err+' (is the portal served by rapha serve?)'; return; }
+  status.textContent=ok+' uploaded ✓ — analysing your photos…';
+  try{ await fetch('/analyze-photos',{method:'POST',headers:{'X-Date':date}}); }catch(e){}
+  let tries=0;
+  const poll=async()=>{
+    tries++;
+    try{
+      const r=await fetch('/photo-analysis?date='+encodeURIComponent(date));
+      const j=await r.json().catch(()=>({}));
+      if(j.ready){ status.textContent='Analysis ready ✓ reloading…'; setTimeout(()=>location.reload(),500); return; }
+    }catch(e){}
+    if(tries>=20){
+      status.textContent='Uploaded ✓ — reloading. If a review does not appear, photo analysis needs an ANTHROPIC_API_KEY (see setup).';
+      setTimeout(()=>location.reload(),900); return;
+    }
+    setTimeout(poll,3000);
+  };
+  poll();
 }
 function _tip(){
   var t=document.getElementById('charttip');

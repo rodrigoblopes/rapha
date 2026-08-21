@@ -530,6 +530,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_workouts.add_argument("--sheet", help="sheet filename fragment (default: current)")
 
+    p_analyze = sub.add_parser(
+        "analyze-photo", help="vision review of a day's progress photos")
+    p_analyze.add_argument("date", nargs="?", help="YYYY-MM-DD (default: today)")
+
     for name, help_text in [
         ("assess", "decide the Projeto 60 Dias level from training history"),
         ("report", "render the portal"),
@@ -538,6 +542,23 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_parser(name, help=help_text)
 
     return parser
+
+
+def cmd_analyze_photo(args: argparse.Namespace) -> int:
+    """Write a vision review of a day's progress photos, then rebuild the portal."""
+    from datetime import date
+
+    from . import vision
+
+    cfg = config.load()
+    day = args.date or date.today().isoformat()
+    if vision.analyze_day(cfg, day, verbose=True):
+        from .dashboard.build import render
+
+        render(cfg)
+        print("analysis written; portal rebuilt")
+        return 0
+    return 1
 
 
 HANDLERS = {
@@ -552,6 +573,7 @@ HANDLERS = {
     "workouts": cmd_workouts,
     "report": cmd_report,
     "serve": cmd_serve,
+    "analyze-photo": cmd_analyze_photo,
 }
 
 

@@ -73,6 +73,9 @@ class PortalHandler(SimpleHTTPRequestHandler):
         if self.path == "/pull-status":
             self._pull_status()
             return
+        if self.path.startswith("/photo-analysis"):
+            self._photo_analysis()
+            return
         super().do_GET()
 
     def _pull_status(self) -> None:
@@ -88,6 +91,28 @@ class PortalHandler(SimpleHTTPRequestHandler):
             self._json(500, {"ok": False, "error": "server misconfigured"})
             return
         self._json(200, pull_status(cfg.home))
+
+    def _photo_analysis(self) -> None:
+        """Whether a day's photo review has been written yet, and its text.
+
+        Read-only and credential-free — it reads analysis.md from disk so the upload
+        UI can poll for the review the fired subprocess is writing. Never touches a key.
+        """
+        import re
+        from urllib.parse import parse_qs, urlparse
+
+        cfg = getattr(self.server, "rapha_cfg", None)
+        if cfg is None:  # pragma: no cover - serve() always sets it
+            self._json(500, {"ok": False, "error": "server misconfigured"})
+            return
+        day = (parse_qs(urlparse(self.path).query).get("date") or [""])[0]
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
+            self._json(400, {"ok": False, "error": "bad date"})
+            return
+        from .dashboard.briefing import _read_photo_analysis
+
+        analysis = _read_photo_analysis(cfg.home / "data" / "photos" / day)
+        self._json(200, {"ready": analysis is not None, "analysis": analysis})
 
     def do_HEAD(self) -> None:
         if not self._host_is_allowed():
@@ -139,6 +164,8 @@ class PortalHandler(SimpleHTTPRequestHandler):
             self._handle_launch_chrome()
         elif self.path == "/pull-now":
             self._handle_pull_now()
+        elif self.path == "/analyze-photos":
+            self._handle_analyze_photos()
         else:
             self.send_error(404, "no such endpoint")
 
@@ -189,6 +216,34 @@ class PortalHandler(SimpleHTTPRequestHandler):
         _log(f"stored progress photo {dest}")
         self._json(200, {"ok": True, "saved": dest.name, "rendered": rendered,
                          "date": dest.parent.parent.name})
+
+    def _handle_analyze_photos(self) -> None:
+        """Fire the photo-analysis subprocess for a date (ADR-015).
+
+        Mirrors launch-chrome/pull-now: the server asks the OS to start a short-lived
+        job and returns immediately. That job — not this listening process — reads the
+        Anthropic key from %RAPHA_HOME%/.env, writes analysis.md, re-renders, and exits.
+        The date is validated to YYYY-MM-DD and passed as an argv element (no shell), so
+        there is no injection surface. A no-key install simply writes nothing.
+        """
+        import re
+        import subprocess
+        import sys as _sys
+        from datetime import date as _date
+
+        day = self.headers.get("X-Date", "") or _date.today().isoformat()
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
+            self._json(400, {"ok": False, "error": "bad date"})
+            return
+        try:
+            subprocess.Popen(
+                [_sys.executable, "-m", "rapha.cli", "analyze-photo", day],
+                close_fds=True)
+        except OSError as e:
+            self._json(500, {"ok": False, "error": f"could not start analysis: {e}"})
+            return
+        _log(f"started photo analysis for {day}")
+        self._json(200, {"ok": True, "analyzing": True, "date": day})
 
     def _handle_measurement(self) -> None:
         from .db import Store
