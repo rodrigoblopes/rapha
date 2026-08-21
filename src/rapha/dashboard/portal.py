@@ -237,6 +237,7 @@ button.copy:hover,.btn:hover{background:var(--accent-hover)}
 .tag{display:inline-block;background:var(--inset);border:1px solid var(--line2);border-radius:3px;
   padding:3px 9px;font-family:var(--mono);font-size:11px;color:var(--ink3);margin:2px 4px 2px 0}
 .spark{display:block}
+.charttip{position:fixed;z-index:200;pointer-events:none;background:var(--ink);color:var(--on-ink);font-family:var(--mono);font-size:11px;padding:5px 9px;border-radius:4px;white-space:nowrap;display:none}.charttip b{color:var(--on-ink);font-weight:700;margin-right:6px}.crossdot{position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--panel);transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:4}.crossline{position:absolute;top:0;bottom:0;width:1px;background:var(--line-strong);transform:translateX(-50%);pointer-events:none;display:none;z-index:1}
 .disclaimer{color:var(--dim2);font-size:12px;text-align:center;padding:16px;line-height:1.6}
 """
 
@@ -283,16 +284,80 @@ async function uploadPhotos(input){
     setTimeout(()=>location.reload(),700);}
   else{status.textContent='Upload failed: '+err+' (is the portal served by rapha serve?)';}
 }
-function _drawLine(el, series, color){
-  const vals=series.map(p=>p[1]).filter(v=>v!=null);
-  if(vals.length<2){ el.innerHTML='<span class="note">not enough data in this range</span>'; return null; }
-  const lo=Math.min(...vals), hi=Math.max(...vals), rng=(hi-lo)||1, w=320, h=48, n=vals.length;
-  const pts=vals.map((v,i)=>((i/(n-1)*w).toFixed(1)+','+(h-(v-lo)/rng*h).toFixed(1))).join(' ');
-  el.innerHTML='<svg width="100%" height="'+(h+8)+'" viewBox="0 0 '+w+' '+(h+8)+'" '
-    +'preserveAspectRatio="none" style="max-width:340px"><polyline fill="none" stroke="'
-    +color+'" stroke-width="2" stroke-linejoin="round" points="'+pts+'"/></svg>';
-  return {latest:vals[vals.length-1], avg:vals.reduce((a,b)=>a+b,0)/vals.length};
+function _tip(){
+  var t=document.getElementById('charttip');
+  if(!t){ t=document.createElement('div'); t.id='charttip'; t.className='charttip'; document.body.appendChild(t); }
+  return t;
 }
+function _attachHover(host, pts, unit){
+  // pts: [{f,fy,v,d}] fractions 0..1 across the plot; unit e.g. ' ms'. A crosshair dot
+  // + vertical rule track the nearest point; a floating tooltip shows its value and date.
+  host.__pts=pts; host.__unit=unit||'';
+  host.style.position='relative'; host.style.cursor='crosshair';
+  if(host.__hoverWired) return;
+  host.__hoverWired=true;
+  var dot=document.createElement('div'); dot.className='crossdot'; host.appendChild(dot);
+  var vl=document.createElement('div'); vl.className='crossline'; host.appendChild(vl);
+  host.addEventListener('mousemove',function(e){
+    var P=host.__pts; if(!P||!P.length){ return; }
+    var r=host.getBoundingClientRect(); var mx=(e.clientX-r.left)/r.width;
+    var best=0,bd=9; for(var i=0;i<P.length;i++){ var dd=Math.abs(P[i].f-mx); if(dd<bd){bd=dd;best=i;} }
+    var p=P[best];
+    dot.style.display='block'; dot.style.left=(p.f*r.width)+'px'; dot.style.top=(p.fy*r.height)+'px';
+    vl.style.display='block'; vl.style.left=(p.f*r.width)+'px';
+    var t=_tip(); t.style.display='block';
+    t.innerHTML='<b>'+(Math.round(p.v*10)/10)+host.__unit+'</b> '+p.d;
+    var tx=e.clientX+14, ty=e.clientY-8;
+    if(tx+140>window.innerWidth){ tx=e.clientX-150; }
+    t.style.left=tx+'px'; t.style.top=ty+'px';
+  });
+  host.addEventListener('mouseleave',function(){
+    dot.style.display='none'; vl.style.display='none';
+    var t=document.getElementById('charttip'); if(t){ t.style.display='none'; }
+  });
+}
+function _drawLine(el, series, color, unit){
+  var clean=series.filter(function(p){return p[1]!=null;});
+  if(clean.length<2){ el.innerHTML='<span class="note">not enough data in this range</span>'; el.__pts=null; return null; }
+  var vals=clean.map(function(p){return p[1];});
+  var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals), rng=(hi-lo)||1, w=320, h=50, n=clean.length;
+  var pts=clean.map(function(p,i){ return {f:i/(n-1), fy:1-(p[1]-lo)/rng, v:p[1], d:(''+p[0]).slice(5)}; });
+  var poly=pts.map(function(p){ return (p.f*w).toFixed(1)+','+(p.fy*h).toFixed(1); }).join(' ');
+  el.innerHTML='<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" '
+    +'style="max-width:340px;display:block;overflow:visible"><polyline fill="none" stroke="'+color
+    +'" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="'+poly+'"/></svg>';
+  _attachHover(el, pts, unit);
+  return {latest:vals[vals.length-1], avg:vals.reduce(function(a,b){return a+b;},0)/vals.length};
+}
+function heroRangeSet(days, btn){
+  heroRange=days;
+  var bs=document.querySelectorAll('#herorange button');
+  for(var i=0;i<bs.length;i++){ bs[i].classList.remove('on'); }
+  if(btn){ btn.classList.add('on'); }
+  drawHero();
+}
+function drawWeight(){
+  var host=document.getElementById('weightplot'); if(!host) return;
+  var W=window.WEIGHT||{}; var act=(W.actual||[]).filter(function(p){return p[1]!=null;});
+  var est=(W.estimate||[]).filter(function(p){return p[1]!=null;});
+  if(act.length<2){ host.innerHTML='<span class="note">No weigh-ins yet</span>'; return; }
+  var all=act.concat(est);
+  var xs=all.map(function(p){return Date.parse(p[0]);});
+  var vs=all.map(function(p){return p[1];});
+  var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs), xr=(x1-x0)||1;
+  var lo=Math.min.apply(null,vs), hi=Math.max.apply(null,vs); var pad=((hi-lo)||1)*0.18; lo-=pad; hi+=pad; var rng=hi-lo;
+  function fx(t){return (t-x0)/xr;} function fy(v){return 1-(v-lo)/rng;}
+  var w=600,h=130;
+  function poly(arr){ return arr.map(function(p){return (fx(Date.parse(p[0]))*w).toFixed(1)+','+(fy(p[1])*h).toFixed(1);}).join(' '); }
+  var svg='<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" style="display:block;overflow:visible">';
+  if(est.length>=2){ svg+='<polyline points="'+poly(est)+'" fill="none" stroke="var(--dim)" stroke-width="1.6" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>'; }
+  svg+='<polyline points="'+poly(act)+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
+  svg+='</svg>';
+  host.innerHTML=svg;
+  var pts=act.map(function(p){ return {f:fx(Date.parse(p[0])), fy:fy(p[1]), v:p[1], d:(''+p[0]).slice(5)}; });
+  _attachHover(host, pts, ' kg');
+}
+
 function perfRange(tf, btn){
   document.querySelectorAll('#perfbar button').forEach(b=>b.classList.remove('on'));
   if(btn) btn.classList.add('on');
@@ -304,7 +369,7 @@ function perfRange(tf, btn){
     const all=(window.PERF&&window.PERF[key])||[];
     const s=all.filter(p=>Date.parse(p[0])>=cutoff);
     const pc=el.querySelector('.pc'), pv=el.querySelector('.pv'), pa=el.querySelector('.pa');
-    const r=_drawLine(pc, s, 'var(--accent)');
+    const r=_drawLine(pc, s, 'var(--accent)', unit);
     if(r){ pv.textContent=(Math.round(r.latest*10)/10)+unit;
       pa.textContent='avg '+(Math.round(r.avg*10)/10)+unit+' \\u00b7 '+s.length+' readings'; }
     else { pv.textContent='\\u2014'; pa.textContent=''; }
@@ -313,7 +378,7 @@ function perfRange(tf, btn){
 function _drawIntraday(){
   const el=document.getElementById('intraday-hr'); if(!el) return;
   const hr=((window.PERF_INTRADAY||{}).hr)||[];
-  _drawLine(el, hr, 'var(--bad)');
+  _drawLine(el, hr, 'var(--bad)', ' bpm');
 }
 function toggleMeasForm(btn){
   const f=document.getElementById('measform');
@@ -424,6 +489,7 @@ window.addEventListener('DOMContentLoaded',function(){ refreshStatus();
   setInterval(refreshStatus,60000); });
 window.addEventListener('DOMContentLoaded',function(){
   _drawIntraday();
+  drawWeight();
   const b=document.querySelector('#perfbar button.def'); if(b) b.click();
 });
 var heroMetric='hrv';
@@ -502,6 +568,8 @@ function drawHero(){
     '<polyline points="'+roll.join(' ')+'" fill="none" stroke="var(--trend)" stroke-width="1.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>'+
     '<polyline points="'+dline+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
   document.getElementById('herosvg').innerHTML=svg;
+  var hpts=cur.map(function(p){return {f:X(p[0])/1000, fy:Y(p[1])/100, v:p[1], d:(''+p[2]).slice(5)};});
+  _attachHover(document.getElementById('heroplot'), hpts, unit);
   yy[0].textContent=_hf(hi); yy[1].textContent=_hf((hi+lo)/2); yy[2].textContent=_hf(lo);
   var xax=document.getElementById('heroxax'); xax.innerHTML='';
   for(var k=0;k<5;k++){var idx=Math.round(k/4*(cur.length-1));
@@ -1107,6 +1175,13 @@ def _performance_tab(b: dict) -> str:
       <button onclick="heroSelect('tdee',this)">Energy burned</button>
       <button onclick="heroSelect('weight',this)">Weight</button>
     </div>
+    <div class="tfbar" id="herorange" style="margin-bottom:14px">
+      <button onclick="heroRangeSet(7,this)">7D</button>
+      <button class="on" onclick="heroRangeSet(30,this)">30D</button>
+      <button onclick="heroRangeSet(90,this)">90D</button>
+      <button onclick="heroRangeSet(365,this)">1Y</button>
+      <button onclick="heroRangeSet(100000,this)">All</button>
+    </div>
     <div class="herohead"><span class="heronum" id="heronum">—</span><span class="herounit" id="herounit"></span><span class="herodelta" id="herodelta"></span></div>
     <div class="heroverdict" id="heroverdict"></div>
     <div class="perfchart">
@@ -1306,6 +1381,8 @@ def _measurements_card(pr: dict) -> str:
 
 
 def _progress_tab(b: dict) -> str:
+    import json as _json
+
     pr = b.get("progress", {})
     ath = b.get("athlete", {})
 
@@ -1336,7 +1413,9 @@ def _progress_tab(b: dict) -> str:
   </div>
   <div class="card">
     <h2>Weight trend</h2>
-    {_weight_chart(pr.get("weight_view", {}))}
+    <div id="weightplot" style="height:150px"></div>
+    <script>window.WEIGHT={_json.dumps(pr.get('weight_view', {}))}</script>
+    <div class="note" style="margin-top:6px"><span style="color:var(--accent)">●</span> weigh-ins &nbsp; <span style="color:var(--dim)">– – –</span> trend estimate &nbsp;·&nbsp; hover for values</div>
     <div class="note">{('Latest ' + str(weights[-1][1]) + ' kg · ' + str(len(weights))
                         + ' weigh-ins') if weights else 'No weigh-ins yet'}</div>
     <div class="note">{_e(pr.get("weight_view", {}).get("trend_note", ""))}</div>
