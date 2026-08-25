@@ -213,6 +213,19 @@ class ExerciseStore:
         ).fetchall()
         return [(r["reps"], r["weight_g"]) for r in rows]
 
+    def sets_on(self, day: date) -> dict[str, list[tuple[int | None, int | None]]]:
+        """One day's ACTIVE sets grouped by detected exercise name — the raw material
+        for the post-session review (what was actually lifted today)."""
+        rows = self._conn.execute(
+            """SELECT name, reps, weight_g FROM exercise_sets
+               WHERE on_date = ? AND name IS NOT NULL ORDER BY set_index""",
+            (day.isoformat(),),
+        ).fetchall()
+        out: dict[str, list[tuple[int | None, int | None]]] = {}
+        for r in rows:
+            out.setdefault(r["name"], []).append((r["reps"], r["weight_g"]))
+        return out
+
     def all_sets(self) -> list[SetRow]:
         """Every stored working set, oldest first — the raw feed for volume/tonnage."""
         rows = self._conn.execute(

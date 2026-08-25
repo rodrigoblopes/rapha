@@ -238,6 +238,7 @@ button.copy:hover,.btn:hover{background:var(--accent-hover)}
   padding:3px 9px;font-family:var(--mono);font-size:11px;color:var(--ink3);margin:2px 4px 2px 0}
 .spark{display:block}
 .charttip{position:fixed;z-index:200;pointer-events:none;background:var(--ink);color:var(--on-ink);font-family:var(--mono);font-size:11px;padding:5px 9px;border-radius:4px;white-space:nowrap;display:none}.charttip b{color:var(--on-ink);font-weight:700;margin-right:6px}.crossdot{position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--panel);transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:4}.crossline{position:absolute;top:0;bottom:0;width:1px;background:var(--line-strong);transform:translateX(-50%);pointer-events:none;display:none;z-index:1}
+.sessblock{margin-top:16px;padding-top:14px;border-top:1px solid var(--row)}.sessblock h3{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink2);margin-bottom:4px}.aimlist{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}.aimlist li{font-size:14px;color:var(--ink3);padding-left:15px;position:relative;line-height:1.45}.aimlist li:before{content:'a';position:absolute;left:0;color:var(--accent);font-weight:600}.sesslab{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-top:12px}.sesslab.good{color:var(--accent2)}.sesslab.warn{color:var(--accent)}
 .disclaimer{color:var(--dim2);font-size:12px;text-align:center;padding:16px;line-height:1.6}
 """
 
@@ -759,9 +760,44 @@ def _md_lite(text: str) -> str:
     return "".join(out)
 
 
-def _coach_card(coach: dict) -> str:
+def _session_html(session: dict | None) -> str:
+    """The workout-state block: before the session, what to aim for; after it, a review."""
+    if not session or session.get("state") in (None, "none", "rest"):
+        return ""
+    focus = _e(session.get("focus", ""))
+    if session["state"] == "todo":
+        lead = ""
+        if session.get("directive"):
+            rir = session.get("reps_in_reserve")
+            lead = (f'<div class="note" style="margin-top:2px">Aim to '
+                    f'{_e(session["directive"])} today'
+                    + (f' — leave {_e(rir)}.' if rir else ".") + '</div>')
+        aims = "".join(f"<li>{_e(a)}</li>" for a in session.get("aims", []))
+        return (f'<div class="sessblock"><h3>Aim today — {focus}</h3>{lead}'
+                f'<ul class="aimlist">{aims}</ul></div>')
+
+    tw = f'{session.get("tonnage_kg", 0):g} kg across {session.get("hard_sets", 0)} hard sets'
+    parts = [f'<div class="sessblock"><h3>Session review — {focus}</h3>'
+             f'<div class="note" style="margin-top:2px">Logged today: {tw}.</div>']
+    if session.get("strong"):
+        rows = "".join(f"<li>{_e(x)}</li>" for x in session["strong"])
+        parts.append(f'<div class="sesslab good">Going well</div>'
+                     f'<ul class="aimlist">{rows}</ul>')
+    if session.get("work_on"):
+        rows = "".join(f"<li>{_e(x)}</li>" for x in session["work_on"])
+        parts.append(f'<div class="sesslab warn">Work on</div>'
+                     f'<ul class="aimlist">{rows}</ul>')
+    for a in session.get("advice", []):
+        parts.append(f'<p class="note" style="margin:8px 0 0">{_e(a)}</p>')
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def _coach_card(coach: dict, session: dict | None = None) -> str:
     """The daily coach read. A fresh Claude-authored note leads; otherwise the always-
-    fresh templated paragraphs stand in, so the card is never empty or stale-by-surprise."""
+    fresh templated paragraphs stand in, so the card is never empty or stale-by-surprise.
+    The workout-state block (aim / review) is appended below either, always."""
+    sess = _session_html(session)
     authored = coach.get("authored")
     if authored and authored.get("fresh"):
         body = _md_lite(authored["text"])
@@ -769,13 +805,14 @@ def _coach_card(coach: dict) -> str:
   <div class="card" style="border-left:3px solid var(--accent)">
     <h2>Your day, in plain terms</h2>
     {body}
+    {sess}
     <div class="note">Written by Claude from today’s numbers — an observation, not
       a medical opinion. Every call is yours.</div>
   </div>"""
 
     paras = "".join(f'<p style="margin:0 0 10px">{_e(p)}</p>'
                     for p in coach.get("paragraphs", []))
-    if not paras:
+    if not paras and not sess:
         return ""
     stale = ""
     if authored and not authored.get("fresh"):
@@ -786,6 +823,7 @@ def _coach_card(coach: dict) -> str:
   <div class="card" style="border-left:3px solid var(--accent)">
     <h2>Your day, in plain terms</h2>
     {paras}
+    {sess}
     {stale}
     <div class="note">Written from today’s numbers — an observation, not a medical
       opinion. Every call is yours.</div>
@@ -822,7 +860,7 @@ def _today_tab(b: dict) -> str:
     )
 
     coach = b.get("coach", {})
-    coach_card = _coach_card(coach)
+    coach_card = _coach_card(coach, b.get("session"))
 
     sw = ov.get("sheet_switch")
     switch_banner = ""

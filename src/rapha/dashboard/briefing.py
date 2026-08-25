@@ -178,6 +178,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     briefing["progression"] = _progression(cfg)
     briefing["progress"] = _progress(days, st, cfg, today, weight_hist, measurements)
     briefing["data_status"] = _data_status(cfg)
+    briefing["session"] = _session_block(cfg, briefing, today)
     briefing["coach"] = _coach(cfg, briefing, today)
     return briefing
 
@@ -219,6 +220,77 @@ def _coach_note(cfg, today) -> dict | None:
     # stale it yields to the always-fresh templated coach.
     return {"text": text, "written": written.isoformat(),
             "fresh": written == today}
+
+
+def _session_block(cfg, briefing, today) -> dict:
+    """Workout-state view for the coach card: before the session, what to aim for;
+    after it, a review of what was actually lifted against the plan.
+
+    'Done' means today's strength sets have been logged (they land on the next Garmin
+    pull). Until then it reads as still-to-do and shows the aims.
+    """
+    tr = briefing.get("training", {})
+    if not tr.get("available"):
+        return {"state": "none"}
+    if tr.get("rest"):
+        return {"state": "rest", "focus": tr.get("focus", "Rest day")}
+
+    exercises = tr.get("exercises", [])
+    adj = tr.get("adjustment", {}) or {}
+    planned = []
+    for ex in exercises:
+        c = ex.get("call") or {}
+        if c.get("garmin") and c.get("target_reps"):
+            planned.append({
+                "name": ex["name"], "garmin": c["garmin"],
+                "target_reps": c["target_reps"],
+                "expected_kg_x10": (round(c["last_kg"] * 10)
+                                    if c.get("last_kg") is not None else None),
+            })
+
+    logged: dict = {}
+    if cfg.db_path.is_file():
+        from ..garmin.exercise_store import ExerciseStore
+
+        with ExerciseStore(cfg.db_path) as es:
+            logged = es.sets_on(today)
+    done = bool(logged)
+
+    if not done:
+        aims = []
+        for ex in exercises:
+            c = ex.get("call") or {}
+            dec = c.get("decision")
+            if dec == "progress" and c.get("suggested_kg") is not None and not c.get("gated"):
+                aims.append(f"{ex['name'].title()} — go for {c['suggested_kg']:g} kg")
+            elif dec == "progress" and c.get("gated") and c.get("last_kg") is not None:
+                aims.append(f"{ex['name'].title()} — hold {c['last_kg']:g} kg (recovery)")
+            elif dec == "hold" and c.get("last_kg") is not None:
+                aims.append(f"{ex['name'].title()} — hold {c['last_kg']:g} kg, own the reps")
+            elif dec == "establish":
+                aims.append(f"{ex['name'].title()} — find your working load")
+        return {
+            "state": "todo",
+            "focus": tr.get("focus", ""),
+            "directive": adj.get("load_directive"),
+            "reps_in_reserve": adj.get("reps_in_reserve"),
+            "headline": adj.get("headline"),
+            "aims": aims[:8],
+        }
+
+    from ..rules.session_review import review_session
+
+    review = review_session(planned, logged,
+                            recovery_status=briefing["overview"]["recovery"]["status"])
+    return {
+        "state": "done",
+        "focus": tr.get("focus", ""),
+        "tonnage_kg": review.tonnage_kg,
+        "hard_sets": review.hard_sets,
+        "strong": review.strong,
+        "work_on": review.work_on,
+        "advice": review.advice,
+    }
 
 
 def _coach(cfg, b: dict, today: date) -> dict:
@@ -464,6 +536,7 @@ def _session_progression(cfg, session) -> tuple[dict, dict]:
             call = call_from_history(target, last, using_dumbbells=dumbbell)
             calls[ex["name"]] = {
                 "decision": call.decision.value,
+                "garmin": gm.name,
                 "target_reps": call.target_reps,
                 "last_kg": (call.last_weight_kg_x10 / 10
                             if call.last_weight_kg_x10 is not None else None),
