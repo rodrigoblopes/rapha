@@ -238,7 +238,7 @@ button.copy:hover,.btn:hover{background:var(--accent-hover)}
   padding:3px 9px;font-family:var(--mono);font-size:11px;color:var(--ink3);margin:2px 4px 2px 0}
 .spark{display:block}
 .charttip{position:fixed;z-index:200;pointer-events:none;background:var(--ink);color:var(--on-ink);font-family:var(--mono);font-size:11px;padding:5px 9px;border-radius:4px;white-space:nowrap;display:none}.charttip b{color:var(--on-ink);font-weight:700;margin-right:6px}.crossdot{position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--panel);transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:4}.crossline{position:absolute;top:0;bottom:0;width:1px;background:var(--line-strong);transform:translateX(-50%);pointer-events:none;display:none;z-index:1}
-.sessblock{margin-top:16px;padding-top:14px;border-top:1px solid var(--row)}.sessblock h3{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink2);margin-bottom:4px}.aimlist{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}.aimlist li{font-size:14px;color:var(--ink3);padding-left:15px;position:relative;line-height:1.45}.aimlist li:before{content:'a';position:absolute;left:0;color:var(--accent);font-weight:600}.sesslab{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-top:12px}.sesslab.good{color:var(--accent2)}.sesslab.warn{color:var(--accent)}
+.sessblock{margin-top:16px;padding-top:14px;border-top:1px solid var(--row)}.sessblock h3{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink2);margin-bottom:4px}.aimlist{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}.aimlist li{font-size:14px;color:var(--ink3);padding-left:15px;position:relative;line-height:1.45}.aimlist li:before{content:'›';position:absolute;left:0;color:var(--accent);font-weight:600}.sesslab{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-top:12px}.sesslab.good{color:var(--accent2)}.sesslab.warn{color:var(--accent)}
 .disclaimer{color:var(--dim2);font-size:12px;text-align:center;padding:16px;line-height:1.6}
 """
 
@@ -814,17 +814,11 @@ def _coach_card(coach: dict, session: dict | None = None) -> str:
                     for p in coach.get("paragraphs", []))
     if not paras and not sess:
         return ""
-    stale = ""
-    if authored and not authored.get("fresh"):
-        stale = (f'<div class="note">A written coach note from {_e(authored["written"])} '
-                 "is on file but out of date — showing today’s computed read "
-                 "instead.</div>")
     return f"""
   <div class="card" style="border-left:3px solid var(--accent)">
     <h2>Your day, in plain terms</h2>
     {paras}
     {sess}
-    {stale}
     <div class="note">Written from today’s numbers — an observation, not a medical
       opinion. Every call is yours.</div>
   </div>"""
