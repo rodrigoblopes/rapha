@@ -81,6 +81,9 @@ class PortalHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/photo-analysis"):
             self._photo_analysis()
             return
+        if self.path.startswith("/exam-review"):
+            self._exam_review()
+            return
         super().do_GET()
 
     def _pull_status(self) -> None:
@@ -118,6 +121,24 @@ class PortalHandler(SimpleHTTPRequestHandler):
 
         analysis = _read_photo_analysis(cfg.home / "data" / "photos" / day)
         self._json(200, {"ready": analysis is not None, "analysis": analysis})
+
+    def _exam_review(self) -> None:
+        """Whether a day's exam review is written yet, and its text. Read-only."""
+        import re
+        from urllib.parse import parse_qs, urlparse
+
+        cfg = getattr(self.server, "rapha_cfg", None)
+        if cfg is None:  # pragma: no cover
+            self._json(500, {"ok": False, "error": "server misconfigured"})
+            return
+        day = (parse_qs(urlparse(self.path).query).get("date") or [""])[0]
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
+            self._json(400, {"ok": False, "error": "bad date"})
+            return
+        from .exams import exams_dir, read_review
+
+        review = read_review(exams_dir(cfg) / day)
+        self._json(200, {"ready": review is not None, "review": review})
 
     def do_HEAD(self) -> None:
         if not self._host_is_allowed():
@@ -171,6 +192,10 @@ class PortalHandler(SimpleHTTPRequestHandler):
             self._handle_pull_now()
         elif self.path == "/analyze-photos":
             self._handle_analyze_photos()
+        elif self.path == "/upload/exam":
+            self._handle_exam_upload()
+        elif self.path == "/analyze-exams":
+            self._handle_analyze_exams()
         else:
             self.send_error(404, "no such endpoint")
 
@@ -221,6 +246,51 @@ class PortalHandler(SimpleHTTPRequestHandler):
         _log(f"stored progress photo {dest}")
         self._json(200, {"ok": True, "saved": dest.name, "rendered": rendered,
                          "date": dest.parent.parent.name})
+
+    def _handle_exam_upload(self) -> None:
+        from .exams import MAX_BYTES, ExamError, ingest_exam
+
+        data = self._read_capped_body(MAX_BYTES)
+        if data is None:
+            return
+        filename = self.headers.get("X-Filename", "")
+        if not filename:
+            self._json(400, {"ok": False, "error": "missing X-Filename header"})
+            return
+        cfg = getattr(self.server, "rapha_cfg", None)
+        if cfg is None:  # pragma: no cover
+            self._json(500, {"ok": False, "error": "server misconfigured"})
+            return
+        try:
+            dest = ingest_exam(cfg, filename, data)
+        except ExamError as e:
+            self._json(400, {"ok": False, "error": str(e)})
+            return
+        rendered = self._rerender(cfg)
+        _log(f"stored medical exam {dest}")
+        self._json(200, {"ok": True, "saved": dest.name, "rendered": rendered,
+                         "date": dest.parent.name})
+
+    def _handle_analyze_exams(self) -> None:
+        """Fire the exam-review subprocess for a date (ADR-015 pattern)."""
+        import re
+        import subprocess
+        import sys as _sys
+        from datetime import date as _date
+
+        day = self.headers.get("X-Date", "") or _date.today().isoformat()
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
+            self._json(400, {"ok": False, "error": "bad date"})
+            return
+        try:
+            subprocess.Popen(
+                [_sys.executable, "-m", "rapha.cli", "analyze-exam", day],
+                close_fds=True)
+        except OSError as e:
+            self._json(500, {"ok": False, "error": f"could not start analysis: {e}"})
+            return
+        _log(f"started exam analysis for {day}")
+        self._json(200, {"ok": True, "analyzing": True, "date": day})
 
     def _handle_analyze_photos(self) -> None:
         """Fire the photo-analysis subprocess for a date (ADR-015).

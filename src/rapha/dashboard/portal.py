@@ -300,6 +300,41 @@ async function uploadPhotos(input){
   };
   poll();
 }
+async function uploadExam(input){
+  // Upload each exam file (PDF/image), then kick off the Claude-CLI review and poll
+  // until it is written — same shape as the photo review.
+  const status=document.getElementById('examstatus');
+  const files=[...input.files];
+  if(!files.length) return;
+  status.textContent='Uploading '+files.length+' file'+(files.length>1?'s':'')+'…';
+  let ok=0, err='', date='';
+  for(const f of files){
+    try{
+      const r=await fetch('/upload/exam',{method:'POST',headers:{'X-Filename':f.name},body:f});
+      const j=await r.json().catch(()=>({}));
+      if(r.ok&&j.ok){ ok++; if(j.date) date=j.date; } else { err=(j&&j.error)||('HTTP '+r.status); }
+    }catch(e){ err=''+e; }
+  }
+  input.value='';
+  if(!ok){ status.textContent='Upload failed: '+err+' (is the portal served by rapha serve?)'; return; }
+  status.textContent=ok+' uploaded ✓ — reading your exam…';
+  try{ await fetch('/analyze-exams',{method:'POST',headers:{'X-Date':date}}); }catch(e){}
+  let tries=0;
+  const poll=async()=>{
+    tries++;
+    try{
+      const r=await fetch('/exam-review?date='+encodeURIComponent(date));
+      const j=await r.json().catch(()=>({}));
+      if(j.ready){ status.textContent='Review ready ✓ reloading…'; setTimeout(()=>location.reload(),500); return; }
+    }catch(e){}
+    if(tries>=40){
+      status.textContent='Uploaded ✓ — reloading. If no review appears, the Claude CLI could not be found (see setup).';
+      setTimeout(()=>location.reload(),900); return;
+    }
+    setTimeout(poll,3000);
+  };
+  poll();
+}
 function _tip(){
   var t=document.getElementById('charttip');
   if(!t){ t=document.createElement('div'); t.id='charttip'; t.className='charttip'; document.body.appendChild(t); }
@@ -1487,6 +1522,56 @@ def _progress_tab(b: dict) -> str:
 </div>"""
 
 
+def _exams_tab(b: dict) -> str:
+    ex = b.get("exams", {}) or {}
+    sets = ex.get("sets", [])
+
+    sched = ""
+    if ex.get("latest"):
+        cls = "bad" if ex.get("review_overdue") else "muted"
+        tail = " — a fresh panel is overdue." if ex.get("review_overdue") else "."
+        sched = (f'<div class="note">Most recent exam on file: '
+                 f'<strong>{_e(ex["latest"])}</strong>. A yearly general panel would put the '
+                 f'next around <span class="{cls}">{_e(ex.get("next_due") or "—")}</span>{tail} '
+                 "The detailed re-test rhythm is inside each review below.</div>")
+
+    upload = (
+        '<label class="btn" style="cursor:pointer;display:inline-block">Upload an exam'
+        '<input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple '
+        'onchange="uploadExam(this)" style="display:none"></label>'
+        '<div class="note" id="examstatus" style="margin-top:8px"></div>')
+
+    cards = ""
+    for s in sets:
+        files = "".join(
+            f'<a class="tag" href="/exams/{_e(s["date"])}/{_e(f)}" '
+            f'target="_blank">{_e(f)}</a>' for f in s.get("files", []))
+        files_html = f'<div style="margin:2px 0 12px">{files}</div>' if files else ""
+        review = s.get("review")
+        body = (_md_lite(review) if review else
+                '<div class="note">📋 Review pending — it appears here once the exam has '
+                'been read.</div>')
+        cards += (f'<div class="card"><h2>Exam · {_e(s["date"])}</h2>'
+                  f'{files_html}{body}</div>')
+    if not sets:
+        cards = ('<div class="card"><div class="note">No exams uploaded yet — use the '
+                 "button above to add your first lab report.</div></div>")
+
+    return f"""
+<div class="tab" id="exams">
+  <div class="card">
+    <h2>Medical Exams</h2>
+    <div class="note">Upload a lab report (PDF) and it is read into a plain-language
+      review — what the results say, what it means for your training, when to test again,
+      and what to consider next. <strong>These are observations against the lab's own
+      reference ranges, not medical advice — confirm anything with your GP.</strong></div>
+    <div style="margin-top:14px">{upload}</div>
+    {sched}
+  </div>
+  {cards}
+</div>"""
+
+
 def _data_status_tab(b: dict) -> str:
     import json as _json
 
@@ -1605,6 +1690,7 @@ def render(b: dict) -> str:
         '<button onclick="tab(\'meals\',this)">Meals</button>'
         '<button onclick="tab(\'performance\',this)">Performance</button>'
         '<button onclick="tab(\'progress\',this)">Progress</button>'
+        '<button onclick="tab(\'exams\',this)">Medical Exams</button>'
         f'<button id="tab-datastatus" class="{ds_class}" onclick="tab(\'datastatus\',this)">'
         '<span class="dot" id="navdot" style="background:currentColor"></span>'
         'Data Status</button>'
@@ -1626,6 +1712,7 @@ def render(b: dict) -> str:
         + _meals_tab(b)
         + _performance_tab(b)
         + _progress_tab(b)
+        + _exams_tab(b)
         + _data_status_tab(b)
         + '</main>'
         + footer

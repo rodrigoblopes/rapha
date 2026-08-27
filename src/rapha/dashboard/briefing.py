@@ -178,6 +178,7 @@ def build(cfg, *, today: date | None = None) -> dict[str, Any]:
     briefing["progression"] = _progression(cfg)
     briefing["progress"] = _progress(days, st, cfg, today, weight_hist, measurements)
     briefing["data_status"] = _data_status(cfg)
+    briefing["exams"] = _exams(cfg, today)
     briefing["session"] = _session_block(cfg, briefing, today)
     briefing["coach"] = _coach(cfg, briefing, today)
     return briefing
@@ -778,6 +779,46 @@ def _vitals(days) -> dict:
         "sleep_score_on": score_on.isoformat() if score_on else None,
         "sleep_stages": stages,
         "hrv_status": hrv_status,
+    }
+
+
+def _exams(cfg, today) -> dict:
+    """Medical-exam sets with their written reviews, and a simple next-review nudge.
+
+    Keyed by the folder date (when the exam was recorded). ``next_due`` is a light
+    annual prompt off the most recent one; the detailed schedule lives in each review,
+    which is an observation against the lab's reference ranges — never medical advice.
+    """
+    from datetime import timedelta
+
+    from ..exams import exams_dir, files_for, read_review
+
+    root = exams_dir(cfg)
+    sets = []
+    if root.is_dir():
+        for d in sorted((x for x in root.iterdir() if x.is_dir()),
+                        key=lambda x: x.name, reverse=True):
+            files = [f.name for f in files_for(cfg, d.name)]
+            review = read_review(d)
+            if files or review:
+                sets.append({"date": d.name, "files": files, "review": review})
+
+    latest = sets[0]["date"] if sets else None
+    next_due = None
+    days_over = None
+    if latest:
+        try:
+            due = date.fromisoformat(latest) + timedelta(days=365)
+            next_due = due.isoformat()
+            days_over = (today - due).days
+        except ValueError:
+            pass
+    return {
+        "available": True,
+        "sets": sets,
+        "latest": latest,
+        "next_due": next_due,
+        "review_overdue": (days_over is not None and days_over > 0),
     }
 
 

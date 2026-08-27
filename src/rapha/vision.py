@@ -23,6 +23,8 @@ from pathlib import Path
 
 #: A front/side/back set is a handful of shots; cap what one review reads.
 MAX_IMAGES = 6
+#: An exam upload is usually one multi-page PDF; a couple of files at most.
+MAX_EXAM_FILES = 4
 #: Vision over several photos can take a while; well clear of a real run, bounded so a
 #: wedged CLI can never hang the analysis forever.
 TIMEOUT_S = 300
@@ -38,6 +40,9 @@ _PROMPT = (
     "a short encouraging headline, then a blank line, then two to four short paragraphs. "
     "Do not write any preamble, file paths, or commentary about the task."
 )
+
+_EXAM_PROMPT = "You are a health-literate assistant helping a man in his early 40s who trains hard on a strength and body-recomposition programme understand his OWN lab results. Read this medical exam (a pathology report): {paths}. Then write a clear, plain-language review for someone with no medical background, using these markdown sections, each a '## ' heading:\n\n## What the results say - go through the panels; state plainly that the bulk are within the lab's reference range, and flag anything OUTSIDE it by name (the test, the result, the range, and whether high or low). Be specific and factual.\n\n## Impact on your training - for anything notable, explain in general physiological terms how it could relate to training, recovery or nutrition. If the picture supports hard training, say so plainly and why.\n\n## When to review again - suggest a sensible re-testing rhythm for these panels (e.g. a yearly general panel; a shorter recheck for anything out of range).\n\n## Exams worth considering - from his age, sex and these results, suggest which tests to keep doing or add at this life stage, framed as general screening.\n\nHARD RULES you must follow: this is NOT medical advice and you must say so in one line at the end. Read ONLY against the lab's own reference ranges. Do NOT diagnose any condition, do NOT name or dose any drug or supplement, and do NOT give treatment targets. For anything out of range or any decision, tell him to confirm with his GP or doctor. Start with a one-line headline, then the four sections. No jargon without a plain explanation."  # noqa: E501
+
 
 
 def _env(cfg, key: str) -> str | None:
@@ -88,6 +93,58 @@ def is_configured(cfg) -> bool:
     return find_claude(cfg) is not None
 
 
+def _run_claude(cfg, prompt: str, *, say=lambda m: None) -> str | None:
+    """Run the Claude CLI headless on a prompt and return its text, or None on failure.
+
+    Locates the CLI, runs ``claude -p ... --output-format text`` on the Max plan, decodes
+    UTF-8. Read-only tools; no key. Shared by the photo and exam reviews."""
+    claude = find_claude(cfg)
+    if not claude:
+        say("Claude Code CLI not found — leaving the review pending "
+            "(set CLAUDE_CLI in %RAPHA_HOME%/.env if it lives somewhere unusual)")
+        return None
+    cmd = [claude, "-p", prompt, "--allowedTools", "Read",
+           "--permission-mode", "acceptEdits", "--output-format", "text"]
+    model = _env(cfg, "RAPHA_VISION_MODEL")
+    if model:
+        cmd += ["--model", model]
+    try:
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                                errors="replace", timeout=TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError) as e:
+        say(f"Claude CLI failed to run: {e}")
+        return None
+    text = (result.stdout or "").strip()
+    if result.returncode != 0 or not text:
+        say(f"no output (exit {result.returncode})")
+        return None
+    return text
+
+
+def analyze_exam_day(cfg, day: str, *, verbose: bool = False) -> bool:
+    """Write ``review.md`` interpreting a day's uploaded medical exam(s). True iff written.
+
+    A graceful no-op (False) with no files or no CLI. The review is an observation against
+    the lab's own reference ranges, never medical advice — see the prompt's hard rules."""
+    def say(m: str) -> None:
+        if verbose:
+            print(m, flush=True)
+
+    from .exams import exams_dir, files_for
+
+    files = files_for(cfg, day)[:MAX_EXAM_FILES]
+    if not files:
+        say(f"no exam files for {day}")
+        return False
+    text = _run_claude(cfg, _EXAM_PROMPT.format(paths=", ".join(str(f) for f in files)),
+                       say=say)
+    if not text:
+        return False
+    (exams_dir(cfg) / day / "review.md").write_text(text, encoding="utf-8")
+    say(f"wrote exam review for {day} from {len(files)} file(s)")
+    return True
+
+
 def analyze_day(cfg, day: str, *, verbose: bool = False) -> bool:
     """Write ``analysis.md`` for one day's photos via the Claude CLI. True iff written.
 
@@ -102,27 +159,8 @@ def analyze_day(cfg, day: str, *, verbose: bool = False) -> bool:
     if not imgs:
         say(f"no photos for {day}")
         return False
-    claude = find_claude(cfg)
-    if not claude:
-        say("Claude Code CLI not found — leaving analysis pending "
-            "(set CLAUDE_CLI in %RAPHA_HOME%/.env if it lives somewhere unusual)")
-        return False
-
-    prompt = _PROMPT.format(paths=", ".join(str(p) for p in imgs))
-    cmd = [claude, "-p", prompt, "--allowedTools", "Read",
-           "--permission-mode", "acceptEdits", "--output-format", "text"]
-    model = _env(cfg, "RAPHA_VISION_MODEL")
-    if model:
-        cmd += ["--model", model]
-    try:
-        result = subprocess.run(cmd, capture_output=True, encoding="utf-8",
-            errors="replace", timeout=TIMEOUT_S)
-    except (OSError, subprocess.SubprocessError) as e:
-        say(f"Claude CLI failed to run: {e}")
-        return False
-    text = (result.stdout or "").strip()
-    if result.returncode != 0 or not text:
-        say(f"no review produced (exit {result.returncode})")
+    text = _run_claude(cfg, _PROMPT.format(paths=", ".join(str(p) for p in imgs)), say=say)
+    if not text:
         return False
     (day_dir(cfg, day) / "analysis.md").write_text(text, encoding="utf-8")
     say(f"wrote analysis for {day} from {len(imgs)} photo(s)")

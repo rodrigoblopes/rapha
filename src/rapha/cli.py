@@ -534,6 +534,10 @@ def build_parser() -> argparse.ArgumentParser:
         "analyze-photo", help="vision review of a day's progress photos")
     p_analyze.add_argument("date", nargs="?", help="YYYY-MM-DD (default: today)")
 
+    p_exam = sub.add_parser(
+        "analyze-exam", help="interpret a day's uploaded medical exam(s)")
+    p_exam.add_argument("date", nargs="?", help="YYYY-MM-DD (default: today)")
+
     for name, help_text in [
         ("assess", "decide the Projeto 60 Dias level from training history"),
         ("report", "render the portal"),
@@ -542,6 +546,23 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_parser(name, help=help_text)
 
     return parser
+
+
+def cmd_analyze_exam(args: argparse.Namespace) -> int:
+    """Interpret a day's uploaded medical exam(s), then rebuild the portal."""
+    from datetime import date
+
+    from . import vision
+
+    cfg = config.load()
+    day = args.date or date.today().isoformat()
+    if vision.analyze_exam_day(cfg, day, verbose=True):
+        from .dashboard.build import render
+
+        render(cfg)
+        print("exam review written; portal rebuilt")
+        return 0
+    return 1
 
 
 def cmd_analyze_photo(args: argparse.Namespace) -> int:
@@ -574,6 +595,7 @@ HANDLERS = {
     "report": cmd_report,
     "serve": cmd_serve,
     "analyze-photo": cmd_analyze_photo,
+    "analyze-exam": cmd_analyze_exam,
 }
 
 

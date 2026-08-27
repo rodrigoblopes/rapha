@@ -38,4 +38,14 @@ def render(cfg) -> tuple[Path, dict]:
                 if (src / img).is_file():
                     shutil.copy2(src / img, dst / img)
 
+    exam_src = cfg.home / "data" / "exams"
+    if exam_src.is_dir():
+        for ex in b.get("exams", {}).get("sets", []):
+            src = exam_src / ex["date"]
+            dst = cfg.dist_dir / "exams" / ex["date"]
+            dst.mkdir(parents=True, exist_ok=True)
+            for f in ex.get("files", []):
+                if (src / f).is_file():
+                    shutil.copy2(src / f, dst / f)
+
     return portal.write(cfg.dist_dir, b), b
