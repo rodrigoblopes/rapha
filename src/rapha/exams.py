@@ -87,3 +87,88 @@ def read_review(day_dir: Path) -> str | None:
         return None
     text = path.read_text(encoding="utf-8").strip()
     return text or None
+
+#: A preventive panel to raise with a GP — OBSERVATIONS, not medical advice. Each item's
+#: ``key`` is the token an exam review's ``COVERED:`` line uses to tick it automatically.
+GP_CHECKLIST = [
+    ("Core bloods", [
+        {"key": "fbc", "label": "Full blood count",
+         "note": "Anaemia, platelet and white-cell abnormalities"},
+        {"key": "uec_egfr", "label": "UEC + eGFR",
+         "note": "Kidney function; eGFR ideally >90"},
+        {"key": "lft", "label": "Liver function tests",
+         "note": "ALT is often the first quiet signal of fatty liver"},
+        {"key": "hba1c", "label": "HbA1c",
+         "note": "<5.7%; 5.7–6.4% is prediabetes"},
+        {"key": "glucose", "label": "Fasting glucose",
+         "note": "<5.5 mmol/L; ideal under 5.0"},
+        {"key": "insulin", "label": "Fasting insulin",
+         "note": "<8 mIU/L; with glucose gives HOMA-IR (<1.5 ideal)"},
+        {"key": "lipids", "label": "Lipid profile",
+         "note": "Triglycerides <1.5; TG:HDL as an insulin-resistance proxy"},
+        {"key": "iron", "label": "Iron studies + ferritin",
+         "note": "Depletion — and high ferritin/transferrin flagging haemochromatosis"},
+        {"key": "b12_folate", "label": "B12 + folate",
+         "note": "Deficiency, especially on any acid suppression"},
+        {"key": "tsh", "label": "TSH",
+         "note": "Thyroid function; 0.5–2.5 mIU/L is comfortable"},
+        {"key": "vitd", "label": "Vitamin D (25-OH)",
+         "note": "75–125 nmol/L; rebate restricted, may be out of pocket"},
+    ]),
+    ("Cardiometabolic add-ons", [
+        {"key": "apob", "label": "ApoB",
+         "note": "<0.9 g/L general; 0.6–0.8 for aggressive prevention"},
+        {"key": "lpa", "label": "Lp(a)",
+         "note": ">125 nmol/L elevated — test once, ever"},
+        {"key": "hscrp", "label": "hs-CRP",
+         "note": "<1 mg/L low risk; test on a rested, well day"},
+        {"key": "psa", "label": "PSA (baseline)",
+         "note": "40–49: really only with family history (your lab's own note)"},
+    ]),
+    ("Not bloods", [
+        {"key": "bp", "label": "Blood pressure",
+         "note": "<120/80; ask for 24-hour ambulatory if borderline in clinic"},
+        {"key": "waist", "label": "Waist circumference",
+         "note": "<94 cm; better visceral-fat proxy than BMI — tracked on the Progress tab"},
+        {"key": "skin", "label": "Full skin check",
+         "note": "Annual in SA — new, changing or asymmetric lesions"},
+        {"key": "eye", "label": "Eye exam + eye pressure",
+         "note": "Baseline at 40; glaucoma is silent"},
+        {"key": "sleep_apnoea", "label": "Sleep apnoea screen",
+         "note": "Snoring, witnessed apnoeas, unrefreshing sleep"},
+        {"key": "family_history", "label": "Family history (written)",
+         "note": "Conditions and ages for parents and siblings — it drives the rest"},
+    ]),
+]
+
+#: The tokens a review's COVERED line may use — the blood tests that can auto-tick.
+COVERABLE_KEYS = {it["key"] for _sec, items in GP_CHECKLIST for it in items}
+
+
+def parse_covered(review: str) -> set[str]:
+    """The test tokens an exam review declares it has results for (its ``COVERED:`` line)."""
+    for line in (review or "").splitlines():
+        if line.strip().lower().startswith("covered:"):
+            raw = line.split(":", 1)[1]
+            return {t.strip().lower() for t in raw.split(",")
+                    if t.strip().lower() in COVERABLE_KEYS}
+    return set()
+
+
+def strip_covered(review: str) -> str:
+    """The review without its machine-readable COVERED line — the human-facing text."""
+    return chr(10).join(ln for ln in (review or "").splitlines()
+                        if not ln.strip().lower().startswith("covered:")).strip()
+
+
+def checklist_status(covered: dict) -> list[dict]:
+    """The GP checklist annotated with what has been done. ``covered`` maps a test key to
+    the most recent date an exam covered it."""
+    out = []
+    for section, items in GP_CHECKLIST:
+        rows = [{**it, "done": it["key"] in covered, "date": covered.get(it["key"])}
+                for it in items]
+        out.append({"section": section, "items": rows,
+                    "done": sum(1 for r in rows if r["done"]), "total": len(rows)})
+    return out
+

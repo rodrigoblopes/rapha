@@ -791,17 +791,42 @@ def _exams(cfg, today) -> dict:
     """
     from datetime import timedelta
 
-    from ..exams import exams_dir, files_for, read_review
+    from ..exams import (
+        checklist_status,
+        exams_dir,
+        files_for,
+        parse_covered,
+        read_review,
+        strip_covered,
+    )
 
     root = exams_dir(cfg)
     sets = []
+    covered: dict = {}
     if root.is_dir():
         for d in sorted((x for x in root.iterdir() if x.is_dir()),
                         key=lambda x: x.name, reverse=True):
             files = [f.name for f in files_for(cfg, d.name)]
             review = read_review(d)
-            if files or review:
-                sets.append({"date": d.name, "files": files, "review": review})
+            if not (files or review):
+                continue
+            for key in parse_covered(review or ""):
+                if d.name > covered.get(key, ""):   # keep the most recent date per test
+                    covered[key] = d.name
+            sets.append({"date": d.name, "files": files,
+                         "review": strip_covered(review) if review else None})
+
+    # waist is tracked on the Progress tab — tick it here too if there is a reading
+    if cfg.db_path.is_file():
+        try:
+            from ..db import Store
+
+            with Store(cfg.db_path) as store:
+                waisted = [m for m in store.measurements() if getattr(m, "waist", None)]
+            if waisted:
+                covered["waist"] = max(m.on.isoformat() for m in waisted)
+        except Exception:
+            pass
 
     latest = sets[0]["date"] if sets else None
     next_due = None
@@ -819,6 +844,7 @@ def _exams(cfg, today) -> dict:
         "latest": latest,
         "next_due": next_due,
         "review_overdue": (days_over is not None and days_over > 0),
+        "checklist": checklist_status(covered),
     }
 
 

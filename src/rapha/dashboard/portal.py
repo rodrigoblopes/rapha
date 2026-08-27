@@ -239,6 +239,7 @@ button.copy:hover,.btn:hover{background:var(--accent-hover)}
 .spark{display:block}
 .charttip{position:fixed;z-index:200;pointer-events:none;background:var(--ink);color:var(--on-ink);font-family:var(--mono);font-size:11px;padding:5px 9px;border-radius:4px;white-space:nowrap;display:none}.charttip b{color:var(--on-ink);font-weight:700;margin-right:6px}.crossdot{position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--panel);transform:translate(-50%,-50%);pointer-events:none;display:none;z-index:4}.crossline{position:absolute;top:0;bottom:0;width:1px;background:var(--line-strong);transform:translateX(-50%);pointer-events:none;display:none;z-index:1}
 .sessblock{margin-top:16px;padding-top:14px;border-top:1px solid var(--row)}.sessblock h3{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink2);margin-bottom:4px}.aimlist{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}.aimlist li{font-size:14px;color:var(--ink3);padding-left:15px;position:relative;line-height:1.45}.aimlist li:before{content:'›';position:absolute;left:0;color:var(--accent);font-weight:600}.sesslab{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-top:12px}.sesslab.good{color:var(--accent2)}.sesslab.warn{color:var(--accent)}
+.chksec{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink2);margin:16px 0 6px;display:flex;justify-content:space-between;align-items:baseline}.chkcount{color:var(--dim2);font-size:10px}.chklist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}.chklist li{display:flex;gap:9px;font-size:14px;line-height:1.4;color:var(--ink3)}.chkmark{flex:0 0 auto;width:16px;text-align:center;font-weight:700}.chkdone .chkmark{color:var(--accent2)}.chktodo .chkmark{color:var(--dim2)}.chktodo strong{color:var(--ink2)}.chkdone strong{color:var(--ink)}.chkdate{font-family:var(--mono);font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:.04em}
 .disclaimer{color:var(--dim2);font-size:12px;text-align:center;padding:16px;line-height:1.6}
 """
 
@@ -1522,6 +1523,32 @@ def _progress_tab(b: dict) -> str:
 </div>"""
 
 
+def _checklist_html(checklist: list | None) -> str:
+    """The 'panel to discuss with your GP' card — ticks fill in from uploaded exams."""
+    if not checklist:
+        return ""
+    secs = ""
+    for sec in checklist:
+        rows = ""
+        for it in sec["items"]:
+            done = it.get("done")
+            mark = "✓" if done else "○"
+            cls = "chkdone" if done else "chktodo"
+            when = (f' <span class="chkdate">done {_e(it["date"])}</span>'
+                    if done and it.get("date") else "")
+            rows += (f'<li class="{cls}"><span class="chkmark">{mark}</span>'
+                     f'<span><strong>{_e(it["label"])}</strong> — {_e(it["note"])}{when}</span></li>')
+        secs += (f'<div class="chksec">{_e(sec["section"])} '
+                 f'<span class="chkcount">{sec.get("done", 0)}/{sec.get("total", 0)}</span></div>'
+                 f'<ul class="chklist">{rows}</ul>')
+    return (
+        '<div class="card"><h2>Panel to discuss with your GP</h2>'
+        '<div class="note">A preventive list to raise with your GP — observations, not '
+        'medical advice. Ticks fill in automatically as your uploaded exams (and your '
+        'measurements) cover each item.</div>'
+        f'{secs}</div>')
+
+
 def _exams_tab(b: dict) -> str:
     ex = b.get("exams", {}) or {}
     sets = ex.get("sets", [])
@@ -1568,6 +1595,7 @@ def _exams_tab(b: dict) -> str:
     <div style="margin-top:14px">{upload}</div>
     {sched}
   </div>
+  {_checklist_html(ex.get("checklist"))}
   {cards}
 </div>"""
 
