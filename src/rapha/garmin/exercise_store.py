@@ -226,6 +226,18 @@ class ExerciseStore:
             out.setdefault(r["name"], []).append((r["reps"], r["weight_g"]))
         return out
 
+    def training_dates_since(self, start: date) -> list[date]:
+        """Distinct days on/after ``start`` that have logged sets — i.e. days trained.
+
+        The count of these drives completion-based scheduling: the live session is the
+        next one you have not done, so missing a day shifts the plan instead of skipping
+        a session."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT on_date FROM exercise_sets WHERE on_date >= ? ORDER BY on_date",
+            (start.isoformat(),),
+        ).fetchall()
+        return [date.fromisoformat(r["on_date"]) for r in rows]
+
     def all_sets(self) -> list[SetRow]:
         """Every stored working set, oldest first — the raw feed for volume/tonnage."""
         rows = self._conn.execute(

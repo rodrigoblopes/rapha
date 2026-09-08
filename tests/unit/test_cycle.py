@@ -73,3 +73,18 @@ class TestRotation:
         assert resolve(sheet, start=START, today=START.replace(day=5)).is_rest
         # …and day 6 restarts the 5-day cycle on session 1.
         assert resolve(sheet, start=START, today=START.replace(day=6)).session_day == 1
+
+
+def test_training_sequence_drops_rest_and_placeholder_days():
+    from rapha.rules.cycle import training_sequence
+    sheet = {
+        "sessions": [
+            {"day": 1, "focus": "Legs", "exercises": [{"name": "squat"}]},
+            {"day": 2, "focus": "Chest", "exercises": [{"name": "bench"}]},
+            {"day": 3, "focus": "Back", "exercises": [{"name": "row"}]},
+            {"day": 4, "focus": "Shoulders", "exercises": [{"name": "press"}]},
+            {"day": 5, "focus": "Rest", "exercises": []},
+        ],
+        "rotation": [{"day": 5, "restarts_cycle": True}],
+    }
+    assert training_sequence(sheet) == [1, 2, 3, 4]

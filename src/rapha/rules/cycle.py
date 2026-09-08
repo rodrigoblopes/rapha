@@ -79,3 +79,34 @@ def resolve(
         day_of, cycle_day, False, None,
         "no session mapped for this cycle day — check the sheet",
     )
+
+def training_sequence(programme: dict, *, cycle_length: int | None = None) -> list[int]:
+    """The non-rest session-days of one cycle, in order — the sequence you actually
+    progress through as you train. Repeats resolve to their source day; rest days and
+    the empty 'TREINADOR' placeholder are dropped. So a 4-on/1-off sheet returns
+    ``[1, 2, 3, 4]`` — and the live session is chosen by how many of these you have
+    *completed*, not by the calendar, so a missed day is picked up rather than skipped.
+    """
+    sessions = {s["day"]: s for s in programme.get("sessions", [])}
+    rotation = _rotation_map(programme.get("rotation", []))
+    if cycle_length is None:
+        restart = next((d for d, e in rotation.items() if e.get("restarts_cycle")), None)
+        highest = max([*sessions, *rotation], default=1)
+        cycle_length = (restart - 1) if restart else highest
+
+    seq: list[int] = []
+    for d in range(1, cycle_length + 1):
+        entry = rotation.get(d)
+        if entry and entry.get("is_rest"):
+            continue
+        if entry and entry.get("repeats_day"):
+            seq.append(entry["repeats_day"])
+            continue
+        ses = sessions.get(d)
+        if ses is None:
+            continue
+        if "exercises" in ses and not ses["exercises"]:   # empty placeholder = rest
+            continue
+        seq.append(d)
+    return seq
+

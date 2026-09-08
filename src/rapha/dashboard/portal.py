@@ -993,6 +993,28 @@ def _adjustment_banner(adj: dict | None) -> str:
             f'<div class="note">{_e(adj.get("detail",""))}</div></div>')
 
 
+def _schedule_note(tr: dict) -> str:
+    """A line explaining the completion-based schedule: done today, catching up, or a
+    gentle rest nudge — so a missed session reads as 'owed', never lost."""
+    if tr.get("trained_today"):
+        pos = tr.get("position") or {}
+        extra = (f' ({pos.get("done")}/{pos.get("of")} sessions this block)'
+                 if pos.get("of") else "")
+        return (f'<div class="note" style="color:var(--accent2)">✓ Logged today — '
+                f'this is the session you did{extra}.</div>')
+    bits = []
+    if tr.get("catch_up"):
+        bits.append("Catching up — this is a session you missed, surfaced next instead "
+                    "of skipped.")
+    if tr.get("rest_suggested"):
+        bits.append(f'You have trained {tr.get("streak_days", 0)} days running — a rest '
+                    "day is fine; this session waits for you.")
+    if not bits:
+        bits.append("Next session due — the plan follows what you have actually done, "
+                    "so a missed day is picked up here rather than skipped.")
+    return f'<div class="note">{_e(" ".join(bits))}</div>'
+
+
 def _training_tab(b: dict) -> str:
     tr = b.get("training", {})
     if not tr.get("available"):
@@ -1026,6 +1048,7 @@ def _training_tab(b: dict) -> str:
 <div class="tab" id="training">
   <div class="card">
     <h2>{_e(tr["level"])} · Day {tr["day"]} · {_e(tr["focus"])}</h2>
+    {_schedule_note(tr)}
     {_adjustment_banner(tr.get("adjustment"))}
     {ex_rows}
     <div class="note"><strong>Progression:</strong> {_e(tr["progression"])}</div>

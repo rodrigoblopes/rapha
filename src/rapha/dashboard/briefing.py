@@ -560,12 +560,75 @@ def _training(cfg, programmes, st, today) -> dict:
     start = date.fromisoformat(st["protocol_start"]) if st.get("protocol_start") else today
     if not sheet:
         return {"available": False}
-    pos = cycle.resolve(sheet, start=_sheet_cycle_start(st, sheet, start), today=today)
-    if pos.is_rest or pos.session_day is None:
-        return {"available": True, "rest": True, "focus": "Rest day",
-                "note": pos.note, "level": sheet["level"]}
 
-    session = next((s for s in sheet["sessions"] if s["day"] == pos.session_day), None)
+    # Completion-based, not calendar-based: the live session is the next one you have
+    # NOT done, so a missed day is picked up rather than skipped, and a day you actually
+    # trained never reads as "rest". Rest is a suggestion (below), never a block.
+    cyc_start = _sheet_cycle_start(st, sheet, start)
+    seq = cycle.training_sequence(sheet)
+    trained_today = False
+    rest_suggested = False
+    streak = 0
+    catch_up = False
+
+    # Which Garmin exercises each training day is made of — so a logged session can be
+    # matched back to the day it was (you might train the days out of order, or catch up
+    # a missed one).
+    day_names: dict[int, set] = {}
+    for s in sheet["sessions"]:
+        names = {gm.name for ex in (s.get("exercises") or [])
+                 if (gm := try_map(ex["name"])) and gm.name}
+        if names:
+            day_names[s["day"]] = names
+
+    def _match(logged: set) -> int | None:
+        best, score = None, 0
+        for d, names in day_names.items():
+            hit = len(names & logged)
+            if hit > score:
+                best, score = d, hit
+        return best
+
+    by_date: dict = {}    # date -> set of logged Garmin exercise names, since block start
+    if cfg.db_path.is_file() and day_names:
+        from ..garmin.exercise_store import ExerciseStore
+
+        with ExerciseStore(cfg.db_path) as es:
+            for r in es.all_sets():
+                if r.name and r.on >= cyc_start:
+                    by_date.setdefault(r.on, set()).add(r.name)
+
+    trained_today = today in by_date
+    last_done: dict[int, date] = {}          # training day -> latest date it was done
+    for d in sorted(by_date):
+        md = _match(by_date[d])
+        if md is not None:
+            last_done[md] = d
+
+    if not seq:                               # unparsed rotation — calendar fallback
+        pos = cycle.resolve(sheet, start=cyc_start, today=today)
+        if pos.is_rest or pos.session_day is None:
+            return {"available": True, "rest": True, "focus": "Rest day",
+                    "note": pos.note, "level": sheet["level"]}
+        session_day = pos.session_day
+    elif trained_today and (md := _match(by_date[today])) is not None:
+        session_day = md                      # show exactly the session you did today
+    else:
+        # the session you owe: a never-done day (in cycle order), else the one done
+        # longest ago — so a missed session surfaces instead of being skipped.
+        never = [d for d in seq if d not in last_done]
+        session_day = never[0] if never else min(last_done, key=last_done.get)
+        # a catch-up = a due day that is out of its usual turn (missed earlier)
+        catch_up = bool(never) and never[0] != seq[len(last_done) % len(seq)]
+
+    probe = today if today in by_date else today - timedelta(days=1)
+    while probe in by_date:
+        streak += 1
+        probe -= timedelta(days=1)
+    rest_suggested = not trained_today and bool(seq) and streak >= len(seq)
+    position = {"done": len(last_done), "of": len(seq)}
+
+    session = next((s for s in sheet["sessions"] if s["day"] == session_day), None)
     if not session:
         return {"available": True, "rest": False, "focus": "—", "exercises": []}
 
@@ -613,6 +676,11 @@ def _training(cfg, programmes, st, today) -> dict:
         "level": sheet["level"],
         "day": session["day"],
         "focus": session["focus"],
+        "trained_today": trained_today,
+        "position": position,
+        "streak_days": streak,
+        "rest_suggested": rest_suggested,
+        "catch_up": catch_up,
         "exercises": exercises,
         "progression": (
             "Double progression (Módulo 17): the reps are fixed. Find the load that "
