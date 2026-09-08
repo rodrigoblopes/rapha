@@ -537,6 +537,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_exam = sub.add_parser(
         "analyze-exam", help="interpret a day's uploaded medical exam(s)")
     p_exam.add_argument("date", nargs="?", help="YYYY-MM-DD (default: today)")
+    sub.add_parser("analyze-pending",
+                   help="analyse any photos/exams with no review yet (uses your login)")
 
     for name, help_text in [
         ("assess", "decide the Projeto 60 Dias level from training history"),
@@ -546,6 +548,41 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_parser(name, help=help_text)
 
     return parser
+
+
+def cmd_analyze_pending(args: argparse.Namespace) -> int:
+    """Analyse any uploaded photos/exams that have no review yet, then rebuild.
+
+    Runs as the logged-in user (hourly refresh + at login) so it has the Claude Max
+    login the SYSTEM-run portal can't reach — closing the loop the portal opened.
+    Idempotent: a set that already has its review is skipped."""
+    from . import vision
+    from .exams import exams_dir, files_for
+
+    cfg = config.load()
+    done = 0
+    photos_root = cfg.home / "data" / "photos"
+    if photos_root.is_dir():
+        for d in sorted(x for x in photos_root.iterdir() if x.is_dir()):
+            if (d / "analysis.md").is_file() or not vision.jpgs_for(cfg, d.name):
+                continue
+            if vision.analyze_day(cfg, d.name, verbose=True):
+                done += 1
+    ex_root = exams_dir(cfg)
+    if ex_root.is_dir():
+        for d in sorted(x for x in ex_root.iterdir() if x.is_dir()):
+            if (d / "review.md").is_file() or not files_for(cfg, d.name):
+                continue
+            if vision.analyze_exam_day(cfg, d.name, verbose=True):
+                done += 1
+    if done:
+        from .dashboard.build import render
+
+        render(cfg)
+        print(f"analysed {done} pending set(s); portal rebuilt")
+    else:
+        print("nothing pending")
+    return 0
 
 
 def cmd_analyze_exam(args: argparse.Namespace) -> int:
@@ -596,6 +633,7 @@ HANDLERS = {
     "serve": cmd_serve,
     "analyze-photo": cmd_analyze_photo,
     "analyze-exam": cmd_analyze_exam,
+    "analyze-pending": cmd_analyze_pending,
 }
 
 
