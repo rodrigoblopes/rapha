@@ -25,6 +25,10 @@ DEBUG_PORT = 9222
 FRESH_MINUTES = 60
 #: The scheduled task the "Pull now" button fires — the same hourly job, on demand.
 PULL_TASK_NAME = "Rapha Pull"
+#: The task the "Open Chrome" button fires. It runs as the logged-in user (session 1)
+#: so the debug Chrome opens on the real desktop — the SYSTEM-run portal (session 0)
+#: cannot show a window there itself (ADR-016).
+CHROME_TASK_NAME = "Rapha Chrome"
 
 
 def run_task_command(task_name: str = PULL_TASK_NAME) -> list[str]:

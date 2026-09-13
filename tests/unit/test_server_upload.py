@@ -198,30 +198,36 @@ class TestMeasurementEndpoint:
 
 
 class TestLaunchChrome:
-    def test_it_launches_a_fixed_command_and_reports_ok(self, tmp_path, monkeypatch):
-        cfg = SimpleNamespace(home=tmp_path)
-        calls = {}
-
+    def test_it_fires_the_chrome_task_and_reports_ok(self, monkeypatch):
+        # The SYSTEM-run portal (session 0) can't show a window on the desktop, so the
+        # button fires the user-session "Rapha Chrome" task rather than spawning Chrome.
         import subprocess
-        monkeypatch.setattr("rapha.pull_status.find_chrome", lambda: r"C:\chrome.exe")
-        monkeypatch.setattr(subprocess, "Popen",
-                            lambda cmd, **kw: calls.setdefault("cmd", cmd))
+        captured = {}
 
-        h, rec = _handler(_same_origin(), cfg=cfg)
+        def fake_run(cmd, **kw):
+            captured["cmd"] = cmd
+            return SimpleNamespace(returncode=0, stdout="SUCCESS", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        h, rec = _handler(_same_origin())
         h.path = "/launch-chrome"
         h.do_POST()
 
         assert rec.json[0] == 200 and rec.json[1]["ok"] is True
-        assert calls["cmd"][0] == r"C:\chrome.exe"
-        assert "--remote-debugging-port=9222" in calls["cmd"]
+        assert captured["cmd"] == ["schtasks", "/run", "/tn", "Rapha Chrome"]
 
-    def test_missing_chrome_is_404(self, tmp_path, monkeypatch):
-        cfg = SimpleNamespace(home=tmp_path)
-        monkeypatch.setattr("rapha.pull_status.find_chrome", lambda: None)
-        h, rec = _handler(_same_origin(), cfg=cfg)
+    def test_a_missing_chrome_task_is_reported(self, monkeypatch):
+        import subprocess
+        monkeypatch.setattr(
+            subprocess, "run",
+            lambda cmd, **kw: SimpleNamespace(returncode=1, stdout="",
+                                              stderr="ERROR: task does not exist"),
+        )
+        h, rec = _handler(_same_origin())
         h.path = "/launch-chrome"
         h.do_POST()
-        assert rec.json[0] == 404
+        assert rec.json[0] == 500
+        assert "Rapha Chrome" in rec.json[1]["error"]
 
     def test_a_cross_origin_launch_is_refused(self):
         h, rec = _handler(_same_origin({"Sec-Fetch-Site": "cross-site"}))
