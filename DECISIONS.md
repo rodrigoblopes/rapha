@@ -529,3 +529,26 @@ Firewall inbound rule for the port; without it the LAN can't connect.
 **Consequences.** No authentication is a real exposure and is the owner's accepted risk;
 revisit with token auth or Tailscale (the machine already has a Tailscale IP) if the network
 is ever shared. Default behaviour is unchanged — localhost-only unless `PORTAL_HOST` is set.
+
+## ADR-017 — Portal runs as the logged-in user (auto-login), not as SYSTEM
+
+**Context.** ADR-016's follow-on made the "Rapha Portal" task run as **SYSTEM at boot** so
+it came up with nobody logged in. That put the portal in **session 0** (the isolated service
+session), which a Windows service cannot escape to draw on the interactive desktop. Three
+in-session actions broke or degraded as a result: launching the debug Chrome (opened
+invisibly in session 0), the on-upload photo/exam review (SYSTEM can't reach the per-user
+Claude Max login), and generally anything touching the user's desktop or profile-scoped auth.
+
+**Decision.** Revert to the original model — the portal runs as the **logged-in user** via a
+**logon-triggered** task — and enable **Windows auto-login** for that user so the box still
+comes back unattended after a reboot. With the portal in the user's session, Chrome launch,
+uploads, and photo/exam analysis all work directly again (no session-0 workarounds, no
+SYSTEM launcher pinning RAPHA_HOME, no user-session relay task for Chrome). `/launch-chrome`
+is back to spawning Chrome directly.
+
+**Consequences.** The machine boots straight into the user's desktop with no lock screen, and
+the account password is stored (as an LSA secret via `netplwiz`, not plaintext) — an accepted
+trade for a headless home media server, revisit if the box is ever physically shared. The
+hourly/login `analyze-pending` catch-up is kept as a harmless safety net even though uploads
+now review in-session. The unlimited-runtime / no-battery-stop / restart-on-failure task
+settings from the SYSTEM era are retained.

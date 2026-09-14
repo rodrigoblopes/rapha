@@ -351,34 +351,35 @@ class PortalHandler(SimpleHTTPRequestHandler):
         self._json(200, {"ok": True, "date": m.on.isoformat(), "rendered": rendered})
 
     def _handle_launch_chrome(self) -> None:
-        """Open a debug-enabled Chrome on Garmin's sign-in page, on the USER's desktop.
+        """Open a debug-enabled Chrome on Garmin's sign-in page (ADR-012).
 
-        The portal runs as SYSTEM in session 0 (ADR-016) and a service cannot put a
-        window on the interactive desktop — a Popen'd Chrome would open invisibly in
-        session 0, useless for logging in. So this fires the registered "Rapha Chrome"
-        task, which runs as the logged-in user (session 1) with a *fixed* action (the
-        debug-Chrome launch). Same shape as "Pull now": the server only asks the OS to
-        start a task; it holds no credential and no request input reaches the command.
+        The portal runs as the logged-in user (ADR-016 reverted to a logon task), so a
+        launched Chrome opens on the real desktop where the user can sign in. The command
+        is **fixed** — no request input flows into it — so there is no injection surface;
+        the worst a (same-origin-only) trigger can do is open a browser window. It holds
+        no credential: the user types the password into Chrome, never into Rapha, and the
+        pull only ever *attaches* to the session.
         """
         import subprocess
 
-        from .pull_status import CHROME_TASK_NAME, run_task_command
+        from .pull_status import find_chrome, launch_command
 
+        cfg = getattr(self.server, "rapha_cfg", None)
+        if cfg is None:  # pragma: no cover - serve() always sets it
+            self._json(500, {"ok": False, "error": "server misconfigured"})
+            return
+        chrome = find_chrome()
+        if not chrome:
+            self._json(404, {"ok": False,
+                             "error": "Chrome not found in the usual locations"})
+            return
+        profile = str(cfg.home / "chrome-debug")
         try:
-            result = subprocess.run(run_task_command(CHROME_TASK_NAME),
-                                    capture_output=True, text=True, timeout=15,
-                                    check=False)
-        except (OSError, subprocess.SubprocessError) as e:
+            subprocess.Popen(launch_command(chrome, profile), close_fds=True)
+        except OSError as e:
             self._json(500, {"ok": False, "error": f"could not launch Chrome: {e}"})
             return
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout or "").strip() \
-                or f"schtasks exited {result.returncode}"
-            self._json(500, {"ok": False,
-                             "error": f"could not launch Chrome ({detail}) — is the "
-                                      "'Rapha Chrome' task registered?"})
-            return
-        _log("triggered the Rapha Chrome task")
+        _log("launched debug Chrome on the Garmin sign-in page")
         self._json(200, {"ok": True,
                          "message": "Chrome is opening on the Garmin sign-in page — "
                                     "log in, then the hourly pull can attach."})
