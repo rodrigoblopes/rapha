@@ -64,7 +64,6 @@ def assess_recovery(days: list[DailyMetrics], *, today: date) -> RecoveryRead:
     exactly the confusion this avoids. The baseline stays the trailing average.
     """
     window = [d for d in days if today - timedelta(days=28) <= d.on <= today]
-    recent = [d for d in window if d.on >= today - timedelta(days=2)]
     prior = [d for d in window if d.on < today - timedelta(days=2)]
 
     signals: list[RecoverySignal] = []
