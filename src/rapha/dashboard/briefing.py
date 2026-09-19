@@ -437,7 +437,13 @@ def _sheet_cycle_start(st, sheet, protocol_start):
     Sheet 02 covers weeks 5–8, so its cycle begins on the Monday-equivalent of week 5,
     not on the protocol start. Anchoring the cycle here makes "today's session" correct
     the moment the sheet goes live, instead of continuing Sheet 01's count.
+
+    A ``block_start`` in state overrides this: sheets past 02 carry no week label, so a
+    new block is anchored explicitly to the day it began — which also resets completion
+    counting, so the previous sheet's logged sessions don't count toward this one.
     """
+    if st.get("block_start"):
+        return date.fromisoformat(st["block_start"])
     weeks = _sheet_weeks(sheet.get("weeks", "")) if sheet else set()
     first_week = min(weeks) if weeks else 1
     return protocol_start + timedelta(days=(first_week - 1) * 7)
@@ -457,6 +463,15 @@ def _live_sheet(programmes, st, today=None) -> dict | None:
     matching = [p for p in programmes if key in p["level"].upper() and p.get("sessions")]
     if not matching:
         return next((p for p in programmes if p.get("sessions")), None)
+
+    # An explicit override wins — sheets past 02 have no week range, so the week-based
+    # rotation below can't reach them; you pin the active sheet as you progress blocks.
+    active = st.get("active_sheet")
+    if active is not None:
+        pinned = next((p for p in matching
+                       if str(p.get("sheet_number")) == str(active)), None)
+        if pinned:
+            return pinned
 
     week = _protocol_week(st, today)
     if week is not None:
@@ -566,6 +581,13 @@ def _training(cfg, programmes, st, today) -> dict:
     # trained never reads as "rest". Rest is a suggestion (below), never a block.
     cyc_start = _sheet_cycle_start(st, sheet, start)
     seq = cycle.training_sequence(sheet)
+    # A block can start mid-rotation (e.g. begin Sheet 03 on D2, not D1). Rotating the
+    # sequence so `start_day` is first makes the "next owed" pick D2, D3, D4, then D1 —
+    # after which the most-recently-done ordering carries the normal rotation.
+    start_day = st.get("start_day")
+    if start_day in seq:
+        i = seq.index(start_day)
+        seq = seq[i:] + seq[:i]
     trained_today = False
     rest_suggested = False
     streak = 0

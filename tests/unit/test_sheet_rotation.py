@@ -7,6 +7,7 @@ from datetime import date
 from rapha.dashboard.briefing import (
     _live_sheet,
     _protocol_week,
+    _sheet_cycle_start,
     _sheet_switch,
     _sheet_weeks,
 )
@@ -66,3 +67,31 @@ def test_no_switch_once_on_the_final_block():
 def test_no_protocol_start_falls_back_to_first_sheet():
     assert _live_sheet(PROGS, {"level": "INTERMEDIÁRIO"}, date(2026, 8, 16))[
         "sheet_number"] == 1
+
+
+# --- State-driven overrides for blocks past the week-labelled sheets (03+) --------------
+# Sheets 03–06 carry "por 8 SEMANAS" (no week digits), so the week-based rotation above
+# can never reach them. State pins the block explicitly instead.
+
+def test_active_sheet_pins_a_sheet_the_week_rotation_cannot_reach():
+    # Week 5 would normally serve Sheet 2; an explicit active_sheet=3 wins.
+    st = {**ST, "active_sheet": 3}
+    assert _live_sheet(PROGS, st, date(2026, 8, 20))["sheet_number"] == 3
+
+
+def test_active_sheet_is_ignored_when_no_such_sheet_exists():
+    # A pin for a sheet not on file falls through to the normal week rotation.
+    st = {**ST, "active_sheet": 9}
+    assert _live_sheet(PROGS, st, date(2026, 8, 20))["sheet_number"] == 2
+
+
+def test_block_start_anchors_the_cycle_and_resets_counting():
+    # With a block_start, the cycle begins that day regardless of the sheet's week label.
+    st = {**ST, "block_start": "2026-09-20"}
+    sheet = PROGS[2]  # Sheet 3
+    assert _sheet_cycle_start(st, sheet, date(2026, 7, 23)) == date(2026, 9, 20)
+
+
+def test_sheet_cycle_start_without_block_start_uses_the_week_label():
+    # Sheet 2 covers weeks 5–8, so its cycle begins four weeks after the protocol start.
+    assert _sheet_cycle_start(ST, PROGS[1], date(2026, 7, 23)) == date(2026, 8, 20)
