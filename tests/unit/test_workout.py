@@ -65,6 +65,21 @@ PYRAMID = {
     }]
 }
 
+# Three straight sets of 12, then an added drop-set (a 4th set marked dropset).
+DROPSET = {
+    "exercises": [{
+        "name": "Supino reto",
+        "sets": [{"reps": 12}, {"reps": 12}, {"reps": 12},
+                 {"reps": 12, "dropset": True}],
+        "rest": {"value": 60},
+    }]
+}
+
+
+def _drop_step(steps):
+    """The lone interval step carrying the drop-set instruction."""
+    return next(s for s in steps if "drop" in (s.get("description") or "").lower())
+
 
 class TestBuildWorkout:
     def test_the_payload_names_the_workout_and_is_strength(self):
@@ -133,6 +148,39 @@ class TestBuildWorkout:
     def test_no_finisher_means_no_cardio_block(self):
         steps = build_workout(PYRAMID, name="x").payload["workoutSegments"][0]["workoutSteps"]
         assert all(s.get("category") != "CARDIO" for s in steps)
+
+
+class TestDropSet:
+    """A drop-set is a distinct set-method (Módulo 16), not a fourth straight set.
+
+    Merging it into the 3x12 (as _group_sets would by rep count) silently erases the
+    technique — the exact 'wrong stimulus, confidently shown' failure the sheet parsing
+    exists to avoid. It must stand as its own step with the drop instruction.
+    """
+
+    def test_a_dropset_does_not_merge_into_the_straight_sets(self):
+        steps = build_workout(DROPSET, name="x").payload["workoutSegments"][0]["workoutSteps"]
+        # the three 12s collapse to one 3x repeat group; the drop-set stands apart
+        assert steps[0]["type"] == "RepeatGroupDTO"
+        assert steps[0]["numberOfIterations"] == 3
+        drop = _drop_step(steps)
+        assert drop["stepType"]["stepTypeKey"] == "interval"
+
+    def test_a_dropset_is_lap_ended_even_under_the_reps_strategy(self):
+        # A set run to failure with weight drops has no fixed rep count — the athlete
+        # ends it with the lap button, whatever the workout's default strategy.
+        steps = build_workout(DROPSET, name="x", strategy=RepStrategy.REPS
+                              ).payload["workoutSegments"][0]["workoutSteps"]
+        assert _drop_step(steps)["endCondition"]["conditionTypeKey"] == "lap.button"
+
+    def test_the_drop_instruction_is_carried_in_the_description(self):
+        steps = build_workout(DROPSET, name="x").payload["workoutSegments"][0]["workoutSteps"]
+        assert "drop-set" in _drop_step(steps)["description"].lower()
+
+    def test_a_dropset_keeps_the_load_prefill_as_its_starting_weight(self):
+        r = build_workout(DROPSET, name="x", loads={"BARBELL_BENCH_PRESS": 60000})
+        steps = r.payload["workoutSegments"][0]["workoutSteps"]
+        assert _drop_step(steps)["weightValue"] == 60.0
 
     def test_steporders_are_sequential_across_the_tree(self):
         steps = build_workout(PYRAMID, name="x").payload["workoutSegments"][0]["workoutSteps"]

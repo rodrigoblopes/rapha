@@ -5,11 +5,13 @@ an isometric hold, an eccentric emphasis, a peak-contraction squeeze. The reps/l
 prescription alone doesn't convey it, and a set run as a plain set is a different
 stimulus. This maps a keyword in the (Portuguese) exercise name to a plain-language cue.
 
-Honest scope: these Intermediário fichas use straight sets with progressive load and a
-handful of isometric holds — **not** Módulo 16's advanced set-methods (rest-pause,
-drop-set, bi-set), which appear in the course but not in this athlete's sheets. The
-table carries entries for those anyway, so the day a sheet uses one it is recognised
-rather than run blind — but nothing is invented where the data is silent.
+Scope: these Intermediário fichas are mostly straight sets with progressive load and a
+handful of isometric holds. They also carry the occasional Módulo 16 set-method — Sheet
+03 D3 ends Puxador Alto with a **drop-set** — so the assumption that the advanced methods
+(rest-pause, drop-set, bi-set) never reach this athlete's sheets was wrong. This table
+maps a method NAMED in the exercise text to a cue; a drop-set carried structurally (a set
+flagged ``dropset`` in the parsed data) is modelled in ``garmin/workout.py`` instead, as
+its own lap-ended step. Nothing is invented where the data is silent.
 """
 
 from __future__ import annotations

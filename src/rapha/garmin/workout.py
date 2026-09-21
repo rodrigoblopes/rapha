@@ -96,6 +96,10 @@ def _exercise_step(category: str, name: str | None, kind: str, value: int, note:
     if kind == "time":
         step["endCondition"] = _END_TIME
         step["endConditionValue"] = value
+    elif kind == "dropset":
+        # A drop-set is run to failure across weight drops — no fixed count, so the
+        # athlete ends it with the lap button regardless of the workout's strategy.
+        step["endCondition"] = _END_LAP
     elif strategy is RepStrategy.REPS:
         step["endCondition"] = _END_REPS
         step["endConditionValue"] = value
@@ -154,14 +158,18 @@ def _group_sets(sets: list[dict]) -> list[tuple[str, int, int]]:
     """
     runs: list[list] = []
     for s in sets:
-        if s.get("reps") is not None:
+        if s.get("dropset"):
+            # A drop-set is a set-method, not a rep count — it never merges with the
+            # straight sets around it, so it always opens its own singleton run.
+            key = ("dropset", s.get("reps") or 0)
+        elif s.get("reps") is not None:
             key = ("reps", s["reps"])
         elif s.get("duration") is not None:
             d = s["duration"]
             key = ("time", d["value"] if isinstance(d, dict) else d)
         else:
             continue
-        if runs and runs[-1][0] == key:
+        if runs and runs[-1][0] == key and key[0] != "dropset":
             runs[-1][1] += 1
         else:
             runs.append([key, 1])
@@ -213,6 +221,14 @@ def build_workout(
 
         load_g = (loads or {}).get(garmin.name)
         for kind, value, count in _group_sets(exercise.get("sets") or []):
+            if kind == "dropset":
+                # The load pre-fill is the starting weight; the note carries the drop.
+                note = (f"{ex_name} — drop-set: at failure strip ~20% of the load and "
+                        "continue without rest; repeat once")
+                ex_step = _exercise_step(garmin.category, garmin.name, kind, value, note,
+                                         strategy, weight_g=load_g)
+                steps.extend([ex_step, _rest_step(rest_secs)])
+                continue
             unit = "reps" if kind == "reps" else "s"
             note = (f"{ex_name} — {count}x{value} {unit}" if count > 1
                     else f"{ex_name} — {value} {unit}")
